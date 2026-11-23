@@ -51,8 +51,6 @@ interface Exhibitor {
   kind?: string;
   /** 場所QR用スタンプコード（主催者コンソール表示時に遅延発行される） */
   stampCode?: string | null;
-  /** GPS スタンプ用のスポット座標。未設定は null */
-  stampLocation?: { lat: number; lng: number } | null;
 }
 
 interface Coupon {
@@ -340,33 +338,15 @@ export default function EventCouponAdminPage() {
     }
   };
 
-  // ─── スタンプ認証（場所QR・GPS） ───
-  // 参加店を1つ選び、その店の場所QR（表示・ダウンロード・再発行）と
-  // GPS用座標（住所ジオコーディング／数値入力）を管理する。
+  // ─── スタンプ認証（場所QR） ───
+  // 参加店を1つ選び、その店の場所QR（表示・ダウンロード・再発行）を管理する。
   const [stampShopId, setStampShopId] = useState('');
-  const [stampAddress, setStampAddress] = useState('');
-  const [stampLat, setStampLat] = useState('');
-  const [stampLng, setStampLng] = useState('');
   const [stampMessage, setStampMessage] = useState('');
   const [stampBusy, setStampBusy] = useState(false);
   const stampQrWrapRef = useRef<HTMLDivElement | null>(null);
   const shopExhibitors = exhibitors.filter((e) => e.kind !== 'advertiser');
   const stampShop =
     shopExhibitors.find((e) => e.id === stampShopId) ?? shopExhibitors[0] ?? null;
-
-  // 選択中の参加店が変わったら、座標入力欄をその店の保存値に合わせる。
-  useEffect(() => {
-    if (!stampShop) return;
-    setStampLat(
-      stampShop.stampLocation ? String(stampShop.stampLocation.lat) : '',
-    );
-    setStampLng(
-      stampShop.stampLocation ? String(stampShop.stampLocation.lng) : '',
-    );
-    setStampAddress('');
-    // stampShop は exhibitors の再読込でも差し替わるため、ID の変化だけを見る
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stampShop?.id]);
 
   const handleDownloadStampQr = () => {
     const canvas = stampQrWrapRef.current?.querySelector('canvas');
@@ -397,47 +377,7 @@ export default function EventCouponAdminPage() {
       setStampMessage(adminText(locale, 'stampCodeReissued'));
     } catch (e) {
       setStampMessage(
-        e instanceof Error ? e.message : adminText(locale, 'stampLocationFailed'),
-      );
-    } finally {
-      setStampBusy(false);
-    }
-  };
-
-  const handleSaveStampLocation = async (mode: 'geocode' | 'manual' | 'clear') => {
-    if (!stampShop) return;
-    setStampBusy(true);
-    setStampMessage('');
-    try {
-      const body =
-        mode === 'clear'
-          ? { location: null }
-          : mode === 'geocode'
-            ? { address: stampAddress.trim() }
-            : { lat: Number(stampLat), lng: Number(stampLng) };
-      const result = await callApi(
-        `/api/events/${eventId}/exhibitors/${stampShop.id}/stamp-location`,
-        { method: 'PUT', body: JSON.stringify(body) },
-      );
-      const saved =
-        result?.stampLocation &&
-        typeof result.stampLocation.lat === 'number' &&
-        typeof result.stampLocation.lng === 'number'
-          ? { lat: result.stampLocation.lat, lng: result.stampLocation.lng }
-          : null;
-      setExhibitors((prev) =>
-        prev.map((e) =>
-          e.id === stampShop.id ? { ...e, stampLocation: saved } : e,
-        ),
-      );
-      setStampLat(saved ? String(saved.lat) : '');
-      setStampLng(saved ? String(saved.lng) : '');
-      setStampMessage(
-        adminText(locale, mode === 'clear' ? 'stampLocationCleared' : 'stampLocationSaved'),
-      );
-    } catch (e) {
-      setStampMessage(
-        e instanceof Error ? e.message : adminText(locale, 'stampLocationFailed'),
+        e instanceof Error ? e.message : adminText(locale, 'stampCodeReissueFailed'),
       );
     } finally {
       setStampBusy(false);
@@ -906,101 +846,6 @@ export default function EventCouponAdminPage() {
                     {adminText(locale, 'stampQrNotIssued')}
                   </p>
                 )}
-
-                <h3 style={{ fontSize: 15, fontWeight: 800, margin: '26px 0 0' }}>
-                  {adminText(locale, 'stampLocationHeading')}
-                </h3>
-                <p style={{ fontSize: 13.5, marginTop: 8 }}>
-                  {stampShop.stampLocation
-                    ? adminText(locale, 'stampLocationCurrent', {
-                        lat: String(stampShop.stampLocation.lat),
-                        lng: String(stampShop.stampLocation.lng),
-                      })
-                    : adminText(locale, 'stampLocationUnset')}
-                </p>
-                <label style={labelStyle}>
-                  {adminText(locale, 'stampLocationAddressLabel')}
-                  <input
-                    style={inputStyle}
-                    value={stampAddress}
-                    onChange={(e) => setStampAddress(e.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => void handleSaveStampLocation('geocode')}
-                  disabled={stampBusy || !stampAddress.trim()}
-                  style={{
-                    padding: '9px 16px',
-                    fontSize: 13.5,
-                    fontWeight: 700,
-                    borderRadius: 12,
-                    border: '1px solid #E8DCC4',
-                    backgroundColor: '#ffffff',
-                    color: VIOLET,
-                    cursor: 'pointer',
-                    opacity: stampBusy || !stampAddress.trim() ? 0.6 : 1,
-                  }}
-                >
-                  {adminText(locale, 'stampLocationGeocodeButton')}
-                </button>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 14 }}>
-                  <label style={{ ...labelStyle, flex: '1 1 160px' }}>
-                    {adminText(locale, 'stampLocationLatLabel')}
-                    <input
-                      style={inputStyle}
-                      type="number"
-                      step="any"
-                      value={stampLat}
-                      onChange={(e) => setStampLat(e.target.value)}
-                    />
-                  </label>
-                  <label style={{ ...labelStyle, flex: '1 1 160px' }}>
-                    {adminText(locale, 'stampLocationLngLabel')}
-                    <input
-                      style={inputStyle}
-                      type="number"
-                      step="any"
-                      value={stampLng}
-                      onChange={(e) => setStampLng(e.target.value)}
-                    />
-                  </label>
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveStampLocation('manual')}
-                    disabled={stampBusy || !stampLat.trim() || !stampLng.trim()}
-                    style={{
-                      ...primaryButtonStyle,
-                      padding: '10px 18px',
-                      fontSize: 13.5,
-                      opacity: stampBusy || !stampLat.trim() || !stampLng.trim() ? 0.6 : 1,
-                    }}
-                  >
-                    {adminText(locale, 'stampLocationSaveButton')}
-                  </button>
-                  {stampShop.stampLocation && (
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveStampLocation('clear')}
-                      disabled={stampBusy}
-                      style={{
-                        padding: '9px 16px',
-                        fontSize: 13.5,
-                        fontWeight: 700,
-                        borderRadius: 12,
-                        border: '1px solid #E8DCC4',
-                        backgroundColor: '#ffffff',
-                        color: VIOLET,
-                        cursor: 'pointer',
-                        opacity: stampBusy ? 0.6 : 1,
-                      }}
-                    >
-                      {adminText(locale, 'stampLocationClearButton')}
-                    </button>
-                  )}
-                </div>
                 {stampMessage && <p style={adminFeedbackStyle}>{stampMessage}</p>}
               </>
             )}

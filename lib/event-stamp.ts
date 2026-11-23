@@ -11,11 +11,10 @@
 //   達成したら無料クーポンを発行し、stampRound を次周へ進める
 //   （達成後も次の無料分へカウントが継続する）。
 //
-// 付与の鉄則: 判定はすべてサーバー側（この lib）で行う。方式は3つ:
+// 付与の鉄則: 判定はすべてサーバー側（この lib）で行う。方式は2つ:
 // - shop-qr: 参加店セッションだけが押せる（主催者は押せない）。自店の
 //   スタンプしか押せないのは ID の構造上自明。
 // - placed-qr: お客さん本人が、スポットの stampCode（推測不能）で押す。
-// - gps: お客さん本人が、スポット座標との距離判定を通して押す。
 // どの方式でも、会員・周・重複の規則は共通の grantStamp に合流する。
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import {
@@ -32,7 +31,6 @@ import {
   mapExhibitor,
   type EventExhibitor,
 } from './event-coupon';
-import { haversineMeters, parseGeoPoint, type GeoPoint } from './geocode';
 import { isValidStampCode } from './stamp-qr';
 
 // stamps / freeCoupons はリセット・終了削除の対象外（電話番号を含まない台帳）。
@@ -46,14 +44,13 @@ export const EVENT_FREE_COUPONS_COLLECTION = 'freeCoupons';
  * スタンプの付与方式。
  * - 'shop-qr': お客さんの QR をお店が読む（従来方式）
  * - 'placed-qr': チェックポイントに貼った場所 QR をお客さんが読む
- * - 'gps': お客さんの現在地とスポット座標の近接で付与
  * 方式の導入前に押されたスタンプには項目が無いため 'shop-qr' に倒す。
  */
-export type StampMethod = 'shop-qr' | 'placed-qr' | 'gps';
+export type StampMethod = 'shop-qr' | 'placed-qr';
 
 /** 保存済みの付与方式を防御的に読む（読み取り用）。未知・未設定は 'shop-qr'。 */
 export function parseStampMethod(value: unknown): StampMethod {
-  return value === 'placed-qr' || value === 'gps' ? value : 'shop-qr';
+  return value === 'placed-qr' ? value : 'shop-qr';
 }
 
 export interface EventStamp {
@@ -427,70 +424,13 @@ export async function grantStamp(
   });
 }
 
-// ─── 場所QR / GPS（お客さん本人からの付与） ───
-
-/** GPS スタンプを押せるスポットからの距離（メートル）。判定はこの1箇所だけ。 */
-export const STAMP_GPS_RADIUS_M = 150;
-
-export type GpsStampEvaluation =
-  | { ok: true; distanceMeters: number }
-  | { ok: false; status: number; error: string };
-
-/**
- * GPS スタンプの近接判定（純粋関数）。お客さんの座標は判定にだけ使い、
- * 呼び出し側でも保存しない。
- * - 座標が読めない: 400（位置情報が取得できていない）
- * - スポットに座標が未設定: 400（GPS では押せないスポット）
- * - 範囲外: 403（距離入りの文言で理由が分かるようにする）
- */
-export function evaluateGpsStamp(
-  visitorPoint: unknown,
-  spotLocation: GeoPoint | null,
-): GpsStampEvaluation {
-  const point = parseGeoPoint(visitorPoint);
-  if (!point) {
-    return {
-      ok: false,
-      status: 400,
-      error: '位置情報が取得できませんでした。位置情報の許可を確認してください',
-    };
-  }
-  if (!spotLocation) {
-    return {
-      ok: false,
-      status: 400,
-      error: 'このスポットはGPSスタンプに対応していません',
-    };
-  }
-  const distanceMeters = haversineMeters(point, spotLocation);
-  if (distanceMeters > STAMP_GPS_RADIUS_M) {
-    return {
-      ok: false,
-      status: 403,
-      error: `スポットの近くでないとスタンプは押せません（あと約${Math.max(
-        Math.round(distanceMeters - STAMP_GPS_RADIUS_M),
-        1,
-      )}m 近づいてください）`,
-    };
-  }
-  return { ok: true, distanceMeters };
-}
+// ─── 場所QR（お客さん本人からの付与） ───
 
 function exhibitorsRef(db: Firestore, eventId: string) {
   return db
     .collection('events')
     .doc(eventId)
     .collection(EVENT_EXHIBITORS_COLLECTION);
-}
-
-async function getExhibitorById(
-  db: Firestore,
-  eventId: string,
-  exhibitorId: string,
-): Promise<EventExhibitor | null> {
-  const doc = await exhibitorsRef(db, eventId).doc(exhibitorId).get();
-  if (!doc.exists) return null;
-  return mapExhibitor(doc.id, doc.data()!);
 }
 
 /** スポットとして使えない参加店（閉店・掲載停止）のガード。 */
@@ -543,38 +483,6 @@ export async function grantStampByPlacedQr(
     exhibitor,
     memberId: input.memberId,
     method: 'placed-qr',
-  });
-}
-
-/**
- * GPS方式の付与。スポットの保存座標とお客さんの現在地の距離をサーバー
- * 側で判定し、範囲内なら共通の grantStamp に合流する。お客さんの座標は
- * 判定にだけ使い、どこにも保存しない。
- */
-export async function grantStampByGps(
-  db: Firestore,
-  input: {
-    eventId: string;
-    memberId: string;
-    exhibitorId: string;
-    point: unknown;
-  },
-): Promise<GrantStampResult> {
-  const exhibitor = await getExhibitorById(db, input.eventId, input.exhibitorId);
-  if (!exhibitor) {
-    return { ok: false, status: 404, error: 'スポットが見つかりません' };
-  }
-  const spotError = grantableSpotError(exhibitor);
-  if (spotError) return { ok: false, ...spotError };
-  const evaluation = evaluateGpsStamp(input.point, exhibitor.stampLocation);
-  if (!evaluation.ok) {
-    return { ok: false, status: evaluation.status, error: evaluation.error };
-  }
-  return grantStamp(db, {
-    eventId: input.eventId,
-    exhibitor,
-    memberId: input.memberId,
-    method: 'gps',
   });
 }
 

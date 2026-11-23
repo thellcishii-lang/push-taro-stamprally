@@ -54,7 +54,6 @@ import {
   safeLocalStorage,
 } from '@/lib/stamp-celebration';
 import { buildCouponGroups } from '@/lib/coupon-groups';
-import { haversineMeters, type GeoPoint } from '@/lib/geocode';
 import { DEFAULT_REVIEW_CATEGORIES } from '@/lib/event';
 import {
   buildFreeCouponQrPayload,
@@ -185,14 +184,6 @@ interface MemberReview {
 interface ReviewableShop {
   exhibitorId: string;
   exhibitorName: string;
-}
-
-/** GPS スタンプのスポット（公開 API から取得。distance は現在地からの概算）。 */
-interface GpsSpot {
-  exhibitorId: string;
-  name: string;
-  location: GeoPoint | null;
-  distance: number | null;
 }
 
 interface InfoPdf {
@@ -891,13 +882,8 @@ export default function EventVisitorPage() {
   const [coupons, setCoupons] = useState<PublicCoupon[]>([]);
   const [myClaims, setMyClaims] = useState<MemberClaim[]>([]);
   const [stampCard, setStampCard] = useState<MemberStampCard | null>(null);
-  // 場所QR・GPS の付与結果フィードバック（スタンプカードの近くに出す）
+  // 場所QR の付与結果フィードバック（スタンプカードの近くに出す）
   const [stampFeedback, setStampFeedback] = useState<{ text: string; error: boolean } | null>(null);
-  // GPS スタンプ: スポット一覧（現在地取得後に近い順）と取得した現在地
-  const [gpsSpots, setGpsSpots] = useState<GpsSpot[] | null>(null);
-  const [gpsBusy, setGpsBusy] = useState(false);
-  const [gpsMessage, setGpsMessage] = useState('');
-  const gpsPositionRef = useRef<GeoPoint | null>(null);
   // 場所QRの二重処理防止（同じコードは1回だけ API に送る）
   const placedStampBusyRef = useRef(false);
   // ログインボーナスの状態（未登録・未取得なら null）
@@ -1356,98 +1342,6 @@ export default function EventVisitorPage() {
     // locale を入れると言語切替のたびに走るため意図的に外す）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, user, eventId]);
-
-  // GPS スタンプ: 現在地を取得し、スポットを近い順に並べる
-  const handleGpsFind = () => {
-    if (!navigator.geolocation) {
-      setGpsMessage(uiText(locale, 'stampGpsUnsupported'));
-      return;
-    }
-    setGpsBusy(true);
-    setGpsMessage(uiText(locale, 'stampGpsLocating'));
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const here: GeoPoint = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        gpsPositionRef.current = here;
-        try {
-          const res = await fetch(`/api/events/${eventId}/stamps/spots`);
-          const data = await res.json().catch(() => ({}));
-          const spots: GpsSpot[] = (
-            (data.spots ?? []) as Array<{
-              exhibitorId: string;
-              name: string;
-              location: GeoPoint | null;
-            }>
-          ).map((spot) => ({
-            ...spot,
-            distance: spot.location
-              ? Math.round(haversineMeters(here, spot.location))
-              : null,
-          }));
-          spots.sort(
-            (a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity),
-          );
-          setGpsSpots(spots);
-          setGpsMessage('');
-        } catch {
-          setGpsMessage(uiText(locale, 'stampGpsFailed'));
-        } finally {
-          setGpsBusy(false);
-        }
-      },
-      () => {
-        setGpsBusy(false);
-        setGpsMessage(uiText(locale, 'stampGpsFailed'));
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
-    );
-  };
-
-  // GPS スタンプの付与（座標は判定のためだけに送り、サーバーは保存しない）
-  const handleGpsStamp = async (spot: GpsSpot) => {
-    if (!user || !gpsPositionRef.current || gpsBusy) return;
-    setGpsBusy(true);
-    try {
-      const idToken = await user.getIdToken();
-      const res = await fetch(`/api/events/${eventId}/stamps/gps`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          exhibitorId: spot.exhibitorId,
-          lat: gpsPositionRef.current.lat,
-          lng: gpsPositionRef.current.lng,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setStampFeedback({
-          text: data.error ?? uiText(locale, 'stampGpsFailed'),
-          error: true,
-        });
-        return;
-      }
-      setStampFeedback({
-        text: uiText(locale, 'stampGrantedMessage', {
-          shop:
-            typeof data.exhibitorName === 'string'
-              ? data.exhibitorName
-              : spot.name,
-        }),
-        error: false,
-      });
-      await loadMyStamps(user);
-    } catch {
-      setStampFeedback({ text: uiText(locale, 'stampGpsFailed'), error: true });
-    } finally {
-      setGpsBusy(false);
-    }
-  };
 
   // ログインボーナスも購読者だけが持つ（未登録なら loginBonus: null）
   const loadLoginBonus = async (currentUser: User) => {
@@ -2668,85 +2562,6 @@ export default function EventVisitorPage() {
                   {stampFeedback.text}
                 </p>
               )}
-
-              <div style={{ ...cardStyle, padding: 16, marginTop: 12 }}>
-                <p style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>
-                  📍 {uiText(locale, 'stampGpsTitle')}
-                </p>
-                <p style={{ fontSize: 13, color: '#475569', margin: '6px 0 0' }}>
-                  {uiText(locale, 'stampGpsNote')}
-                </p>
-                <button
-                  onClick={handleGpsFind}
-                  disabled={gpsBusy}
-                  style={{
-                    marginTop: 12,
-                    padding: '10px 18px',
-                    fontWeight: 700,
-                    fontSize: 14,
-                    backgroundColor: VIOLET,
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: 10,
-                    cursor: 'pointer',
-                    opacity: gpsBusy ? 0.6 : 1,
-                  }}
-                >
-                  {uiText(locale, 'stampGpsFindButton')}
-                </button>
-                {gpsMessage && (
-                  <p style={{ fontSize: 13.5, color: '#475569', margin: '10px 0 0' }}>
-                    {gpsMessage}
-                  </p>
-                )}
-                {gpsSpots && (
-                  <div style={{ marginTop: 12 }}>
-                    {gpsSpots.map((spot) => (
-                      <div
-                        key={spot.exhibitorId}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: '10px 0',
-                          borderTop: '1px solid #e2e8f0',
-                        }}
-                      >
-                        <span style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ display: 'block', fontSize: 14, fontWeight: 700 }}>
-                            {spot.name}
-                          </span>
-                          <span style={{ display: 'block', fontSize: 12, color: '#64748b' }}>
-                            {spot.distance !== null
-                              ? uiText(locale, 'stampGpsDistanceLabel', {
-                                  distance: String(spot.distance),
-                                })
-                              : uiText(locale, 'stampGpsNoLocationNote')}
-                          </span>
-                        </span>
-                        <button
-                          onClick={() => void handleGpsStamp(spot)}
-                          disabled={gpsBusy || !spot.location}
-                          style={{
-                            padding: '8px 14px',
-                            fontWeight: 700,
-                            fontSize: 13,
-                            backgroundColor: VIOLET,
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: 10,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            opacity: gpsBusy || !spot.location ? 0.5 : 1,
-                          }}
-                        >
-                          {uiText(locale, 'stampGpsStampButton')}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
               {stampCard.freeCoupons.map((freeCoupon) =>
                 freeCoupon.status === 'active' ? (

@@ -104,7 +104,6 @@ export async function POST(
       delistedAt: null,
       closedAt: null,
       stampCode: null,
-      stampLocation: null,
     };
     // コード自体はレスポンスに含めない（メールでのみ出店者に渡る）。
     // メール送信の成否は mailSent で返す（失敗しても登録は成立しているので、
