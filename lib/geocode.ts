@@ -36,42 +36,6 @@ function isValidPoint(lat: number, lng: number): boolean {
 }
 
 /**
- * 保存値・入力値を座標として防御的に読む（読み取り用）。
- * 数値の組で範囲内なら { lat, lng }、それ以外は null。
- */
-export function parseGeoPoint(value: unknown): GeoPoint | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const record = value as Record<string, unknown>;
-  const lat = record.lat;
-  const lng = record.lng;
-  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
-  if (!isValidPoint(lat, lng)) return null;
-  return { lat, lng };
-}
-
-const EARTH_RADIUS_M = 6_371_000;
-
-function toRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
-}
-
-/**
- * 2点間の距離（メートル）を haversine 公式で求める（純粋関数）。
- * GPS スタンプの近接判定（サーバー側）と、来場者画面の近い順表示
- * （クライアント側）の両方から使う。
- */
-export function haversineMeters(a: GeoPoint, b: GeoPoint): number {
-  const dLat = toRadians(b.lat - a.lat);
-  const dLng = toRadians(b.lng - a.lng);
-  const lat1 = toRadians(a.lat);
-  const lat2 = toRadians(b.lat);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
-/**
  * 住所を座標に変換する。変換できない場合は null（例外は投げない）。
  * Nominatim は lat / lon を文字列で返すため数値化して検証する。
  */
