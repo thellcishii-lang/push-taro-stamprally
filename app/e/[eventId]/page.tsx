@@ -36,7 +36,13 @@ import {
   resolveLocale,
   type Locale,
 } from '@/lib/i18n';
-import { uiText } from '@/lib/ui-text';
+import { uiText, type UiTextKey } from '@/lib/ui-text';
+import {
+  AGE_BANDS,
+  GENDERS,
+  type AgeBand,
+  type Gender,
+} from '@/lib/member-demographics';
 import { specialSiteUrl } from '@/lib/special-site';
 import { themeCssVars, themePalette } from '@/lib/theme-color';
 import PoweredByFooter from '@/components/PoweredByFooter';
@@ -267,6 +273,26 @@ const inputStyle: React.CSSProperties = {
   fontSize: 16,
   backgroundColor: '#ffffff',
   boxSizing: 'border-box',
+};
+
+// 年代・性別のコード値 → 表示文の辞書キー（値は lib/member-demographics.ts）
+const AGE_BAND_LABEL_KEYS: Record<AgeBand, UiTextKey> = {
+  'under-10': 'ageBandUnder10',
+  '10s': 'ageBand10s',
+  '20s': 'ageBand20s',
+  '30s': 'ageBand30s',
+  '40s': 'ageBand40s',
+  '50s': 'ageBand50s',
+  '60s': 'ageBand60s',
+  '70-plus': 'ageBand70Plus',
+  'no-answer': 'noAnswer',
+};
+
+const GENDER_LABEL_KEYS: Record<Gender, UiTextKey> = {
+  male: 'genderMale',
+  female: 'genderFemale',
+  other: 'genderOther',
+  'no-answer': 'noAnswer',
 };
 
 const buttonStyle: React.CSSProperties = {
@@ -854,6 +880,9 @@ export default function EventVisitorPage() {
   const [user, setUser] = useState<User | null>(null);
   const [locale, setLocale] = useState<Locale>('ja');
   const [phoneNumber, setPhoneNumber] = useState('');
+  // 年代・性別は任意回答。未選択（''）のときは送信せず、保存側で null になる
+  const [ageBand, setAgeBand] = useState<AgeBand | ''>('');
+  const [gender, setGender] = useState<Gender | ''>('');
   const [verificationCode, setVerificationCode] = useState('');
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [message, setMessage] = useState('');
@@ -1194,7 +1223,13 @@ export default function EventVisitorPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ fcmToken, lang: locale }),
+        body: JSON.stringify({
+          fcmToken,
+          lang: locale,
+          // 年代・性別は選択したときだけ送る（未選択は保存側で null）
+          ...(ageBand ? { ageBand } : {}),
+          ...(gender ? { gender } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -1963,6 +1998,42 @@ export default function EventVisitorPage() {
             {uiText(locale, 'confirmCode')}
           </button>
           {message && <p style={feedbackStyle}>{message}</p>}
+        </section>
+      )}
+
+      {phase === 'register' && (
+        <section style={{ ...cardStyle, marginTop: 20, padding: 16 }}>
+          <p style={{ fontSize: 14, margin: 0 }}>{uiText(locale, 'demographicsIntro')}</p>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginTop: 16 }}>
+            {uiText(locale, 'ageBandLabel')}
+            <select
+              style={inputStyle}
+              value={ageBand}
+              onChange={(e) => setAgeBand(e.target.value as AgeBand | '')}
+            >
+              <option value="">{uiText(locale, 'demographicsSelect')}</option>
+              {AGE_BANDS.map((band) => (
+                <option key={band} value={band}>
+                  {uiText(locale, AGE_BAND_LABEL_KEYS[band])}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginTop: 16 }}>
+            {uiText(locale, 'genderLabel')}
+            <select
+              style={inputStyle}
+              value={gender}
+              onChange={(e) => setGender(e.target.value as Gender | '')}
+            >
+              <option value="">{uiText(locale, 'demographicsSelect')}</option>
+              {GENDERS.map((value) => (
+                <option key={value} value={value}>
+                  {uiText(locale, GENDER_LABEL_KEYS[value])}
+                </option>
+              ))}
+            </select>
+          </label>
         </section>
       )}
 

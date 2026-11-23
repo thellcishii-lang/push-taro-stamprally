@@ -15,6 +15,7 @@ import {
 } from '@/lib/event-register';
 import { getEvent } from '@/lib/event-store';
 import { getEventSmsAuthEnabled } from '@/lib/event-member-auth';
+import { normalizeAgeBand, normalizeGender } from '@/lib/member-demographics';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +66,14 @@ export async function POST(
     return NextResponse.json({ error: '有効な fcmToken が必要です' }, { status: 400 });
   }
   const lang = typeof body.lang === 'string' ? body.lang : undefined;
+  // 年代・性別は任意。許可コードのときだけ登録処理へ渡し、不正値や
+  // 未送信は「送られなかった」扱いに倒す（保存側で null / 未更新になる）。
+  const ageBand = normalizeAgeBand(body.ageBand);
+  const gender = normalizeGender(body.gender);
+  const demographics = {
+    ...(ageBand ? { ageBand } : {}),
+    ...(gender ? { gender } : {}),
+  };
 
   if (smsEnabled) {
     if (typeof decoded.phone_number !== 'string' || !decoded.phone_number) {
@@ -74,6 +83,7 @@ export async function POST(
       phoneE164: decoded.phone_number,
       fcmToken,
       lang,
+      ...demographics,
     });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status });
@@ -89,6 +99,7 @@ export async function POST(
     deviceUid: decoded.uid,
     fcmToken,
     lang,
+    ...demographics,
   });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
