@@ -1,5 +1,5 @@
 // lib/event-coupon.ts
-// Push-taro 町おこし のクーポン基盤（events/{eventId} 配下）。
+// Push-taro.スタンプラリー のクーポン基盤（events/{eventId} 配下）。
 //
 // - exhibitors/{exhibitorId}: 出店者（会社）。ログインはイベント専用の
 //   アクセスコード方式（lib/exhibitor-access.ts）。ドキュメントにメール
@@ -44,7 +44,7 @@ export function parseExhibitorKind(value: unknown): ExhibitorKind {
 
 /**
  * 登録の入口。
- * - 'admin': 管理人が管理画面から発行（従来の入口）
+ * - 'admin': 主催者が管理画面から発行（従来の入口）
  * - 'self': 店・広告主が公開の申込ページから自分で登録（自己申込）
  * 旧ドキュメント（項目なし）は 'admin' として扱う。
  */
@@ -74,7 +74,7 @@ export interface EventExhibitor {
   lang: Locale;
   /** アカウントの種類（参加店／協賛）。旧ドキュメントは 'shop' */
   kind: ExhibitorKind;
-  /** 登録の入口（管理人発行／自己申込）。旧ドキュメントは 'admin' */
+  /** 登録の入口（主催者発行／自己申込）。旧ドキュメントは 'admin' */
   source: ExhibitorSource;
   /**
    * 店舗課金の未払い確定で掲載停止になった日時（ISO）。停止中でない
@@ -118,7 +118,7 @@ function mapExhibitor(
   };
 }
 
-/** クーポンの発行元。'admin' = 管理人（従来どおり無料・即時）、'shop' = 参加店自身。 */
+/** クーポンの発行元。'admin' = 主催者（従来どおり無料・即時）、'shop' = 参加店自身。 */
 export type CouponIssuedBy = 'admin' | 'shop';
 
 /** 保存済みの発行元を防御的に読む（読み取り用）。旧ドキュメントは 'admin'。 */
@@ -144,13 +144,13 @@ export interface EventCoupon {
    * 店舗発行で発行手数料の支払い待ちかどうか。true の間は active=false で
    * 保存され、来場者には見えず取得もできない。支払いが確認できたら
    * activatePaidCoupon で active=true・false に切り替わる。
-   * 管理人発行と無料の店舗発行では常に false。
+   * 主催者発行と無料の店舗発行では常に false。
    */
   paymentPending: boolean;
   /**
    * 店舗発行で作成時点に固定された発行手数料（円）。支払いの検証で
    * Checkout の金額と突き合わせるためのスナップショット。
-   * 管理人発行・無料発行は null。
+   * 主催者発行・無料発行は null。
    */
   feeAmount: number | null;
 }
@@ -261,7 +261,7 @@ export async function createExhibitor(
     /** 登録時の住所（管理用・トップレベル）。公開プロフィールとは別 */
     address?: string | null;
     kind?: ExhibitorKind;
-    /** 登録の入口。未指定は管理人発行（'admin'） */
+    /** 登録の入口。未指定は主催者発行（'admin'） */
     source?: ExhibitorSource;
     /**
      * ドキュメントIDを呼び出し側で先に決める場合に指定する。
@@ -333,7 +333,7 @@ export async function createCoupon(
     description?: string;
     keywords?: string[];
     /**
-     * 発行元。未指定は 'admin'（管理人発行: 従来どおり無料・即時・有効）。
+     * 発行元。未指定は 'admin'（主催者発行: 従来どおり無料・即時・有効）。
      * 'shop'（参加店発行）で発行手数料が有料のときは paymentPending: true を
      * 付けると、支払いが確認されるまで無効（非公開・取得不可）で作られる。
      */

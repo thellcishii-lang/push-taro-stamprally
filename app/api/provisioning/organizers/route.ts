@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       typeof body.restoredSubscriberCap === 'number' || body.restoredSubscriberCap === null
         ? body.restoredSubscriberCap
         : undefined,
-    // 町おこし固有の任意項目。型だけ通して、値の妥当性は
+    // スタンプラリー固有の任意項目。型だけ通して、値の妥当性は
     // lib/provisioning.ts の無害化に任せる（不正値・未送信は既存値を変えない）。
     billingOptionEnabled:
       typeof body.billingOptionEnabled === 'boolean' ? body.billingOptionEnabled : undefined,

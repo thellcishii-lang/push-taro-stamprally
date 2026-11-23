@@ -100,7 +100,7 @@ describe('buildProvisioningUpdate', () => {
     });
   });
 
-  describe('町おこし固有の任意項目', () => {
+  describe('スタンプラリー固有の任意項目', () => {
     it('billingOptionEnabled は boolean が送られた場合だけ含める', () => {
       expect(buildProvisioningUpdate({ companyName: '', billingOptionEnabled: true })).toEqual({
         billingOptionEnabled: true,

@@ -12,7 +12,7 @@
 // 花びらは数秒で止まる（カードはボタンか×で閉じるまで残る）。
 // prefers-reduced-motion の端末では花びらを出さずカードだけ出す。
 // 色はプロジェクトのテーマカラー（--theme-*、来場者ページのルートで
-// 設定済み）に追随し、未設定なら町おこしの既定パレットに倒れる。
+// 設定済み）に追随し、未設定ならスタンプラリーの既定パレットに倒れる。
 import { useEffect, useMemo, useState } from 'react';
 import type { Locale } from '@/lib/i18n';
 import { uiText } from '@/lib/ui-text';

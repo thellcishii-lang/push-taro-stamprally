@@ -50,19 +50,19 @@ describe('createHandoffToken', () => {
 });
 
 describe('buildHonkeHandoffUrl', () => {
-  it('points account links at /machiokoshi-account', () => {
+  it('points account links at /stamprally-account', () => {
     const url = buildHonkeHandoffUrl({ contractId: 'shop-1', purpose: 'account' }, SECRET, NOW);
-    expect(url.startsWith('https://push-taro.com/machiokoshi-account?handoff=')).toBe(true);
+    expect(url.startsWith('https://push-taro.com/stamprally-account?handoff=')).toBe(true);
   });
 
-  it('points coupon-option links at /machiokoshi-option with the eventId', () => {
+  it('points coupon-option links at /stamprally-option with the eventId', () => {
     const url = buildHonkeHandoffUrl(
       { contractId: 'shop-1', purpose: 'coupon-option', eventId: 'ev 1' },
       SECRET,
       NOW
     );
     expect(
-      url.startsWith('https://push-taro.com/machiokoshi-option?eventId=ev%201&handoff=')
+      url.startsWith('https://push-taro.com/stamprally-option?eventId=ev%201&handoff=')
     ).toBe(true);
   });
 });

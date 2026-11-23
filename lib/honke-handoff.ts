@@ -3,19 +3,19 @@
  * 本家（push-taro.com）の契約ページ / クーポン購入ページへの
  * ログイン引き継ぎ（ハンドオフ）リンクの発行。
  *
- * 背景: 町おこしと本家は別の Firebase プロジェクトで、パスワードは
+ * 背景: スタンプラリーと本家は別の Firebase プロジェクトで、パスワードは
  * 初期値だけが共通。以後は別々に変わるため、支払いの導線で
- * 「町おこしで設定したパスワードが通らない」詰まりが起きる。
+ * 「スタンプラリーで設定したパスワードが通らない」詰まりが起きる。
  * そこでコンソール側が短時間・ワンタイムの署名付きリンクを発行し、
  * 本家はそれを検証して契約者本人としてログインさせる
  * （検証側は本家の lib/event-handoff.ts）。
- * 飛び先は本家の町おこし専用ページ（/machiokoshi-account と
- * /machiokoshi-option）。EVENT 用ページには飛ばさない。
+ * 飛び先は本家のスタンプラリー専用ページ（/stamprally-account と
+ * /stamprally-option）。EVENT 用ページには飛ばさない。
  *
  * トークン形式: base64url(JSON ペイロード) + '.' + base64url(HMAC-SHA256)
  * ペイロード: { v, contractId, purpose, eventId?, exp, nonce }
  * 共有シークレットは環境変数 HONKE_HANDOFF_SECRET
- * （本家側の MACHIOKOSHI_HANDOFF_SECRET と同値）。
+ * （本家側の STAMPRALLY_HANDOFF_SECRET と同値）。
  */
 
 import { createHmac, randomBytes } from 'node:crypto';
@@ -72,11 +72,11 @@ export function buildHonkeHandoffUrl(
 ): string {
   const token = createHandoffToken(input, secret, nowSeconds);
   if (input.purpose === 'coupon-option') {
-    return `${HONKE_BASE_URL}/machiokoshi-option?eventId=${encodeURIComponent(
+    return `${HONKE_BASE_URL}/stamprally-option?eventId=${encodeURIComponent(
       input.eventId ?? ''
     )}&handoff=${encodeURIComponent(token)}`;
   }
-  return `${HONKE_BASE_URL}/machiokoshi-account?handoff=${encodeURIComponent(token)}`;
+  return `${HONKE_BASE_URL}/stamprally-account?handoff=${encodeURIComponent(token)}`;
 }
 
 /** ハンドオフ機能が使える設定かどうか（未設定なら通常リンクにフォールバック）。 */

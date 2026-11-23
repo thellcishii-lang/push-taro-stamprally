@@ -1,6 +1,6 @@
 // lib/event-social-instructions.test.ts
 // Muse 向けセットアップ案内文の組み立てを検証する。
-// 案内文は管理人が自分の Muse にそのまま渡すものなので、
+// 案内文は主催者が自分の Muse にそのまま渡すものなので、
 // キュー確認 URL・連携キーの渡し方・朝昼夜の定期確認・完了 API が
 // 欠けていないことを担保する。
 import { describe, expect, it } from 'vitest';

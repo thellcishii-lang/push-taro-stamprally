@@ -1,10 +1,10 @@
 // app/api/events/[eventId]/shop-push-requests/route.ts
 // 参加店向け: プッシュ配信申請の一覧と作成。
 // 手数料（プロジェクト設定 pushPrice、1回あたり）:
-// - 無料（0円・未設定）: 申請はそのまま管理人の承認待ちになる。
-// - 有料: 申請は支払い待ちで作られ、管理人自身の Stripe で支払いが
+// - 無料（0円・未設定）: 申請はそのまま主催者の承認待ちになる。
+// - 有料: 申請は支払い待ちで作られ、主催者自身の Stripe で支払いが
 //   確認できてから承認待ちになる（未払いは承認キューに出ない）。
-// 配信そのものは管理人の承認時に通常の配信として実行される。
+// 配信そのものは主催者の承認時に通常の配信として実行される。
 // 協賛（広告専用）アカウントは使えない。
 import { NextResponse } from 'next/server';
 import { requireEventExhibitor } from '@/lib/event-auth';
@@ -87,7 +87,7 @@ export async function POST(
   const fee = pushFeeOf(event);
   const paid = chargeRequiresPayment(fee);
 
-  // 有料のときは、先に課金レール（管理人の Stripe）が使えることを確認する
+  // 有料のときは、先に課金レール（主催者の Stripe）が使えることを確認する
   let contractId: string | null = null;
   if (paid) {
     const availability = await resolveAdAvailability(db, event.ownerUid);

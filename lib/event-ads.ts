@@ -1,21 +1,21 @@
 // lib/event-ads.ts
-// Push-taro 町おこし の特設サイト広告（参加店の広告枠）。
+// Push-taro.スタンプラリー の特設サイト広告（参加店の広告枠）。
 //
 // 仕組み:
-// - 管理人が特設サイト編集で広告を有効にし、枠数（adsSlots）と月額
+// - 主催者が特設サイト編集で広告を有効にし、枠数（adsSlots）と月額
 //   （adsPrice）を決める。参加店は月額を払って（料金 0 の間は無料で）
 //   広告を出せる。広告はラリーと無関係でよい、店の自由な宣伝。
 // - 広告の内容は参加店ドキュメント（exhibitors/{id}）のトップレベル
 //   項目 `ad` に持つ（プロフィールの外: プロフィール保存で消えない
 //   ように。topFeatured / billingSuspended と同じ考え方）。
 // - 承認制: 店が保存すると「申請中（pending）」版になり、掲載中
-//   （live）版は管理人が承認するまで変わらない。承認で pending が
+//   （live）版は主催者が承認するまで変わらない。承認で pending が
 //   live に繰り上がり、却下すると pending は破棄される（live は不変）。
-// - 課金のレールはトップ掲載と共用: 「管理人自身の Stripe」
+// - 課金のレールはトップ掲載と共用: 「主催者自身の Stripe」
 //   （lib/event-billing.ts）を使い、Checkout の metadata.kind =
 //   'ad-placement' で区別する。契約記録はトップ掲載と同じ形で
 //   adPlacements/{exhibitorId} に持つ。
-// - 前提条件として、管理人の契約に「広告オプション」（本家との別料金
+// - 前提条件として、主催者の契約に「広告オプション」（本家との別料金
 //   契約、organizers.adsOptionEnabled）が必要。オプションが無効な間は
 //   プロジェクト設定（adsEnabled）が ON でも、設定の有効化・申請・
 //   申込・承認・掲載のすべてが止まる（判定は isAdsActionAllowed）。
@@ -138,7 +138,7 @@ export function parseShopAd(value: unknown): ShopAd {
   };
 }
 
-/** 店・管理人向けの状態表示（申請中があれば申請中を優先して見せる）。 */
+/** 店・主催者向けの状態表示（申請中があれば申請中を優先して見せる）。 */
 export function adStatusOf(ad: ShopAd): ShopAdStatus {
   if (ad.pending) return 'pending';
   if (ad.live) return 'live';
@@ -234,7 +234,7 @@ export function submitAdTransition(
 }
 
 /**
- * 管理人の承認: pending を live に繰り上げる。
+ * 主催者の承認: pending を live に繰り上げる。
  * pending が無ければ null（承認できるものが無い）。
  */
 export function approveAdTransition(
@@ -252,7 +252,7 @@ export function approveAdTransition(
 }
 
 /**
- * 管理人の却下: pending を破棄する。live はそのまま残る。
+ * 主催者の却下: pending を破棄する。live はそのまま残る。
  * pending が無ければ null。
  */
 export function rejectAdTransition(
@@ -272,13 +272,13 @@ export function rejectAdTransition(
 
 /** 広告オプションのゲートがかかる操作。 */
 export type AdsGatedAction =
-  /** 管理人がプロジェクト設定で広告を有効にしようとする操作 */
+  /** 主催者がプロジェクト設定で広告を有効にしようとする操作 */
   | 'enable-setting'
   /** 店・協賛が広告内容を保存（申請）する操作 */
   | 'submit'
   /** 店・協賛が広告の新規契約（Checkout）を始める操作 */
   | 'checkout'
-  /** 管理人が広告を承認／却下する操作 */
+  /** 主催者が広告を承認／却下する操作 */
   | 'review'
   /** 公開一覧（特設サイト）へ広告を出す判定 */
   | 'public-list';
@@ -470,7 +470,7 @@ export type ReviewShopAdResult =
   | { ok: true; ad: ShopAd }
   | { ok: false; status: number; error: string };
 
-/** 管理人の承認。申請中が無ければ 409。 */
+/** 主催者の承認。申請中が無ければ 409。 */
 export async function approveShopAd(
   db: Firestore,
   eventId: string,
@@ -492,7 +492,7 @@ export async function approveShopAd(
   return { ok: true, ad: next };
 }
 
-/** 管理人の却下。申請中が無ければ 409。掲載版はそのまま残る。 */
+/** 主催者の却下。申請中が無ければ 409。掲載版はそのまま残る。 */
 export async function rejectShopAd(
   db: Firestore,
   eventId: string,
@@ -572,7 +572,7 @@ export async function listPublicAds(
 ): Promise<PublicAd[]> {
   const event = await getEvent(eventId);
   if (!event || !event.adsEnabled) return [];
-  // 広告オプション（管理人の契約）が無効な間は、掲載中の広告が
+  // 広告オプション（主催者の契約）が無効な間は、掲載中の広告が
   // あっても公開しない（データは消さず、表示だけ止める）。
   if (!(await resolveAdsOptionEnabled(event.ownerUid))) return [];
   const [exhibitorsSnap, placementsSnap] = await Promise.all([
@@ -903,7 +903,7 @@ async function writeAdPlacement(
 
 /**
  * 広告の課金レールが使える状態かどうか。店舗課金オプションと
- * 管理人自身の Stripe を共用するため、条件はトップ掲載と同一
+ * 主催者自身の Stripe を共用するため、条件はトップ掲載と同一
  * （契約者レコードがあり、オプション ON で、Stripe 設定済み）。
  * 料金 0 のプロジェクトではそもそも呼ばれない（課金不要）。
  */
@@ -995,7 +995,7 @@ export async function startAdPlacement(
           currency: 'jpy',
           unit_amount: input.monthlyAmount,
           recurring: { interval: 'month' },
-          product_data: { name: 'Push-taro.町おこし 特設サイト 広告掲載' },
+          product_data: { name: 'Push-taro.スタンプラリー 特設サイト 広告掲載' },
         },
       },
     ],

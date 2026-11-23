@@ -42,7 +42,7 @@ export function celebrationCouponKind(
 
 /** 表示済みを localStorage に残すときのキー（クーポンごとに1キー）。 */
 export function celebrationStorageKey(freeCouponId: string): string {
-  return `machiokoshi-celebrated-${freeCouponId}`;
+  return `stamprally-celebrated-${freeCouponId}`;
 }
 
 /**

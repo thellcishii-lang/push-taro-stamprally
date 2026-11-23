@@ -1,7 +1,7 @@
 'use client';
 
 // app/event-admin/[eventId]/site/page.tsx
-// Push-taro 町おこし 管理人向けの特設サイト編集画面。
+// Push-taro.スタンプラリー 主催者向けの特設サイト編集画面。
 // 本家（push-taro.com）上の特設サイトに表示される、プロジェクトごとの
 // 紹介文・ご当地グルメの定義・ヒーロー画像・アイコン・テーマカラー・
 // 追加事項（タイトル＋本文、最大5件）を編集する。
@@ -378,7 +378,7 @@ export default function SiteEditAdminPage() {
   };
 
   // 参加店の自己登録ページはどこからもリンクされていないため、
-  // 管理人がこの URL を店へ渡して案内する。
+  // 主催者がこの URL を店へ渡して案内する。
   const shopApplyUrl = eventShopApplyUrl(eventId);
   const handleCopyShopApplyUrl = async () => {
     try {

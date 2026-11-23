@@ -1,7 +1,7 @@
 'use client';
 
 // app/e/[eventId]/shop/page.tsx
-// Push-taro 町おこし の参加店用 店舗専用ページ。
+// Push-taro.スタンプラリー の参加店用 店舗専用ページ。
 // 消込画面（redeem）と同じログイン作法（メール+プロジェクト専用
 // アクセスコード → カスタムトークンのセッション）で入り、自店の
 // プロフィールを編集する。入れた情報はデータ1つ（exhibitor の
@@ -92,7 +92,7 @@ interface ShopAdContent {
 
 interface ShopAdState {
   enabled: boolean;
-  /** 広告オプション（管理人の契約）が有効かどうか。無効な間は申請・掲載が止まる */
+  /** 広告オプション（主催者の契約）が有効かどうか。無効な間は申請・掲載が止まる */
   optionEnabled: boolean;
   price: number | null;
   slots: number;

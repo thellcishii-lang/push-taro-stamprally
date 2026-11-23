@@ -1,14 +1,14 @@
 // app/page.tsx
-// 町おこし専用デプロイのルート。公開向けの紹介ページは push-taro.com/machiokoshi に集約し、
+// スタンプラリー専用デプロイのルート。公開向けの紹介ページは push-taro.com/stamprally に集約し、
 // ここはアプリの入口としての最小限の案内だけを置く。
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 
 export const metadata: Metadata = {
-  title: 'Push-taro.町おこし｜ご当地グルメ スタンプラリー',
+  title: 'Push-taro.スタンプラリー｜デジタルスタンプラリー',
   description:
-    'Push-taro.町おこし は、ご当地グルメのスタンプラリー基盤です。お客さんの方は参加店のQRコードからアクセスしてください。',
+    'Push-taro.スタンプラリー は、ご当地グルメのスタンプラリー基盤です。お客さんの方は参加店のQRコードからアクセスしてください。',
   robots: { index: false, follow: false },
 };
 
@@ -29,10 +29,10 @@ export default function HomePage() {
     >
       <BrandLogo />
       <h1 style={{ fontSize: '28px', fontWeight: 900, color: '#0f172a', margin: '24px 0 12px' }}>
-        Push-taro.町おこし
+        Push-taro.スタンプラリー
       </h1>
       <p style={{ fontSize: '15px', color: '#64748b', lineHeight: 1.9, maxWidth: '520px', marginBottom: '32px' }}>
-        このドメインは、ご当地グルメ・スタンプラリーアプリ「Push-taro.町おこし」専用です。
+        このドメインは、ご当地グルメ・スタンプラリーアプリ「Push-taro.スタンプラリー」専用です。
         <br />
         お客さんの方は、参加店に掲示されたQRコードからアクセスしてください。
         <br />
@@ -53,10 +53,10 @@ export default function HomePage() {
             boxShadow: '0 6px 20px rgba(255,69,0,0.3)',
           }}
         >
-          管理人ログイン（管理画面）
+          主催者ログイン（管理画面）
         </Link>
         <a
-          href="https://push-taro.com/machiokoshi"
+          href="https://push-taro.com/stamprally"
           style={{
             display: 'inline-block',
             padding: '14px 28px',

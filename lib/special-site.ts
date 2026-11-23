@@ -13,7 +13,7 @@ export const HONKE_BASE_URL = 'https://push-taro.com';
 
 /** プロジェクトの特設サイト（トップ）の URL。 */
 export function specialSiteUrl(eventId: string): string {
-  return `${HONKE_BASE_URL}/machiokoshi/site/${encodeURIComponent(eventId)}`;
+  return `${HONKE_BASE_URL}/stamprally/site/${encodeURIComponent(eventId)}`;
 }
 
 /** 特設サイト内の参加店ページの URL。 */

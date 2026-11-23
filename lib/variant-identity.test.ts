@@ -31,22 +31,26 @@ const FORBIDDEN_TOKENS = [
   'push-taro-hatsumode', // 初詣のプロジェクト ID
   'push-taro-hatsumode--', // 初詣の hosted.app サブドメイン
   'push-taro-8b503', // 本家のプロジェクト ID
+  'push-taro-machiokoshi', // 町おこし（このバリアントのコピー元）のプロジェクト ID
+  'machiokoshi--push-taro-machiokoshi', // 町おこしの hosted.app サブドメイン
+  'push-taro-fes', // FES のプロジェクト ID
+  'push-taro-fes--', // FES の hosted.app サブドメイン
 ];
 
 describe('バリアント識別', () => {
   it('プロジェクト ID とバックエンド ID から公開 origin が組み立つ', () => {
-    expect(VARIANT_PROJECT_ID).toBe('push-taro-machiokoshi');
+    expect(VARIANT_PROJECT_ID).toBe('push-taro-stamprally');
     // バックエンド ID はプロジェクト ID と別（'machiokoshi'）。
-    expect(VARIANT_BACKEND_ID).toBe('machiokoshi');
+    expect(VARIANT_BACKEND_ID).toBe('push-taro-stamprally');
     expect(APP_HOSTING_ORIGIN).toBe(
-      'https://machiokoshi--push-taro-machiokoshi.asia-east1.hosted.app',
+      'https://push-taro-stamprally--push-taro-stamprally.asia-east1.hosted.app',
     );
   });
 
   it('APP_ORIGIN は自バリアントの hosted.app で、他バリアントの ID を含まない', () => {
     expect(APP_ORIGIN).toBe(APP_HOSTING_ORIGIN);
     const host = new URL(APP_ORIGIN).host;
-    expect(host.endsWith('--push-taro-machiokoshi.asia-east1.hosted.app')).toBe(
+    expect(host.endsWith('--push-taro-stamprally.asia-east1.hosted.app')).toBe(
       true,
     );
     for (const token of FORBIDDEN_TOKENS) {
@@ -56,7 +60,7 @@ describe('バリアント識別', () => {
 
   it('既定ストレージバケットは自プロジェクトのもの', () => {
     expect(DEFAULT_STORAGE_BUCKET).toBe(
-      'push-taro-machiokoshi.firebasestorage.app',
+      'push-taro-stamprally.firebasestorage.app',
     );
     expect(DEFAULT_STORAGE_BUCKET).toBe(DEFAULT_STORAGE_BUCKET_NAME);
   });

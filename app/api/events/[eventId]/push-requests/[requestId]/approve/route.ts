@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/push-requests/[requestId]/approve/route.ts
-// 管理人向け: プッシュ配信申請の承認。承認した申請はその場で通常の
+// 主催者向け: プッシュ配信申請の承認。承認した申請はその場で通常の
 // 配信（campaigns）として実行される。配信に失敗した場合は申請が
 // 'failed' になり、理由が店側にも表示される。
 import { NextResponse } from 'next/server';

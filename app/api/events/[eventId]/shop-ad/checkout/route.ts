@@ -33,7 +33,7 @@ export async function POST(
     );
   }
 
-  // 広告オプション（管理人の契約）が無効な間は新規の申込はできない
+  // 広告オプション（主催者の契約）が無効な間は新規の申込はできない
   // （既存の契約の解約は shop-ad/cancel 側で引き続き可能）。
   const adsOptionEnabled = await resolveAdsOptionEnabled(event.ownerUid);
   if (

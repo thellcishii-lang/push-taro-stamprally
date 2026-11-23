@@ -326,7 +326,7 @@ describe('effectFromStripeEvent', () => {
   });
 });
 
-// 支払い失敗の管理人通知（請求書ごとに1回）用の最小フェイク Firestore。
+// 支払い失敗の主催者通知（請求書ごとに1回）用の最小フェイク Firestore。
 // billingFailureNotices の create / delete だけを再現する。
 function fakeNoticeDb() {
   const docs = new Map<string, Record<string, unknown>>();
@@ -358,7 +358,7 @@ function fakeNoticeDb() {
   return { db: db as unknown as Firestore, docs };
 }
 
-describe('支払い失敗の管理人通知', () => {
+describe('支払い失敗の主催者通知', () => {
   it('文面には店名・プロジェクト名・請求額が入る', () => {
     const mail = buildBillingFailureNoticeEmail({
       shopName: '店A',

@@ -1,5 +1,5 @@
 // lib/event.ts
-// Push-taro 町おこし のプロジェクト設定モデル（純粋な型・定数・判定ロジックのみ）。
+// Push-taro.スタンプラリー のプロジェクト設定モデル（純粋な型・定数・判定ロジックのみ）。
 // Firestore への読み書きは lib/event-store.ts に分離する。
 //
 // 設計原則（干渉しない・波及しない）:
@@ -20,9 +20,9 @@ export type EventResetMode =
 export type EventStatus = 'draft' | 'live' | 'ended';
 
 /**
- * スタンプ達成特典の種類。管理人がプロジェクトごとに選ぶ。
+ * スタンプ達成特典の種類。主催者がプロジェクトごとに選ぶ。
  * - 'free-dish': 「好きな店で1回無料」クーポン（従来の挙動）
- * - 'benefit': 管理人が文面を決める特典クーポン（stampBenefitText）
+ * - 'benefit': 主催者が文面を決める特典クーポン（stampBenefitText）
  */
 export type StampRewardType = 'free-dish' | 'benefit';
 
@@ -62,7 +62,7 @@ export interface EventConfig {
    */
   admissionQrEnabled: boolean;
   /**
-   * スタンプラリーの達成個数（1〜MAX_STAMP_SLOTS）。管理人がプロジェクト
+   * スタンプラリーの達成個数（1〜MAX_STAMP_SLOTS）。主催者がプロジェクト
    * ごとに設定する。1つの周（ラリー1周）で異なる参加店のスタンプを
    * この個数集めると「好きな店で1回無料」クーポンが発行される。
    * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
@@ -70,7 +70,7 @@ export interface EventConfig {
    */
   stampGoalCount: number;
   /**
-   * スタンプ達成特典の種類（'free-dish' | 'benefit'）。管理人が
+   * スタンプ達成特典の種類（'free-dish' | 'benefit'）。主催者が
    * プロジェクトごとに設定する。'free-dish' は従来どおり「好きな店で
    * 1回無料」クーポン、'benefit' は stampBenefitText の内容の特典
    * クーポンが発行される。
@@ -88,7 +88,7 @@ export interface EventConfig {
    */
   stampBenefitText: string;
   /**
-   * 週次ランキングの対象になる最低レビュー件数（1〜20）。管理人が
+   * 週次ランキングの対象になる最低レビュー件数（1〜20）。主催者が
    * プロジェクトごとに設定する。その週の可視レビューがこの件数に
    * 届いた参加店だけがランキングに入る（件数自体も一緒に表示する）。
    * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
@@ -97,7 +97,7 @@ export interface EventConfig {
   rankingMinReviews: number;
   /**
    * レビューの項目別評価の項目名（1〜REVIEW_CATEGORY_MAX_COUNT 件）。
-   * 管理人がプロジェクトごとに内容と数を変えられる。お客さんの書き込み
+   * 主催者がプロジェクトごとに内容と数を変えられる。お客さんの書き込み
    * フォームはこの項目で星を付け、投稿されたレビューには投稿時点の
    * 項目名がスナップショットとして残る（後から設定を変えても過去の
    * レビューの表示は変わらない。実体は lib/event-review.ts）。
@@ -113,7 +113,7 @@ export interface EventConfig {
    */
   links: EventLink[];
   /**
-   * 特設サイト（本家上の公開ページ）の紹介文（最大300字）。管理人が
+   * 特設サイト（本家上の公開ページ）の紹介文（最大300字）。主催者が
    * 特設サイト編集画面で設定し、ヒーローに表示される。未設定は空文字。
    * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
    * 空文字に倒す（検証・正規化は lib/event-site.ts）。
@@ -121,7 +121,7 @@ export interface EventConfig {
   siteDescription: string;
   /**
    * ご当地グルメの定義（最大1000字、改行可）。その土地のグルメと
-   * 呼べる条件・素材・スタイルを管理人が書き、特設サイトに表示する。
+   * 呼べる条件・素材・スタイルを主催者が書き、特設サイトに表示する。
    * 未設定は空文字。導入前に作られたプロジェクトには項目自体が無いため、
    * 読み取り時は空文字に倒す（検証・正規化は lib/event-site.ts）。
    */
@@ -142,12 +142,12 @@ export interface EventConfig {
    */
   themeColor: string | null;
   /**
-   * 特設サイトの追加事項（タイトル＋本文、最大5件）。管理人が特設サイト
+   * 特設サイトの追加事項（タイトル＋本文、最大5件）。主催者が特設サイト
    * 編集画面で設定する。未登録なら空配列。
    */
   siteNotes: SiteNote[];
   /**
-   * 特設サイトのトップ掲載（先頭5枠）課金を有効にするか。管理人が
+   * 特設サイトのトップ掲載（先頭5枠）課金を有効にするか。主催者が
    * 特設サイト編集画面で設定する。既定オフ。オンの間、参加店は
    * topPlacementPrice の月額を払ってトップに優先表示できる
    * （課金の実体は lib/event-placement.ts）。
@@ -163,7 +163,7 @@ export interface EventConfig {
    */
   topPlacementPrice: number | null;
   /**
-   * 毎日ログインボーナスを有効にするか。管理人がプロジェクト設定で
+   * 毎日ログインボーナスを有効にするか。主催者がプロジェクト設定で
    * 設定する。既定オフ。オンの間、来場者は来場者画面で毎日1回
    * チェックインでき、累計 loginBonusDays 日で「好きな店で使える」
    * ログインボーナスクーポンが発行される（実体は lib/event-login.ts）。
@@ -173,15 +173,15 @@ export interface EventConfig {
   loginBonusEnabled: boolean;
   /**
    * ログインボーナスの達成日数（累計・LOGIN_BONUS_DAYS_MIN〜
-   * LOGIN_BONUS_DAYS_MAX の整数）。管理人がプロジェクトごとに設定する。
+   * LOGIN_BONUS_DAYS_MAX の整数）。主催者がプロジェクトごとに設定する。
    * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
    * DEFAULT_LOGIN_BONUS_DAYS に倒す。
    */
   loginBonusDays: number;
   /**
-   * 特設サイトの広告ページ（参加店の広告枠）を有効にするか。管理人が
+   * 特設サイトの広告ページ（参加店の広告枠）を有効にするか。主催者が
    * 特設サイト編集画面で設定する。既定オフ。オンの間、参加店は
-   * adsPrice の月額（0 なら無料）を払って広告を出せ、管理人の承認を
+   * adsPrice の月額（0 なら無料）を払って広告を出せ、主催者の承認を
    * 経て特設サイトに最大 adsSlots 件まで掲載される
    * （実体は lib/event-ads.ts）。
    * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
@@ -198,14 +198,14 @@ export interface EventConfig {
   /**
    * 広告の月額料金（円）。未設定は null。設定する場合は
    * ADS_PRICE_MIN〜ADS_PRICE_MAX の整数。0 は「無料」: 課金は
-   * 発生せず、管理人の承認だけで掲載される。
+   * 発生せず、主催者の承認だけで掲載される。
    */
   adsPrice: number | null;
   /**
    * 参加店が自店のクーポンを発行するときの手数料（1件あたり・円）。
-   * 管理人が特設サイト編集画面で設定する。未設定（null）は 0 円
+   * 主催者が特設サイト編集画面で設定する。未設定（null）は 0 円
    * （無料）として扱う。設定する場合は COUPON_ISSUE_PRICE_MIN〜
-   * COUPON_ISSUE_PRICE_MAX の整数。有料の間は管理人自身の Stripe で
+   * COUPON_ISSUE_PRICE_MAX の整数。有料の間は主催者自身の Stripe で
    * 支払いが完了するまでクーポンは公開されない
    * （実体は lib/event-charges.ts）。
    * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
@@ -214,9 +214,9 @@ export interface EventConfig {
   couponIssuePrice: number | null;
   /**
    * 参加店がプッシュ配信を申請するときの手数料（1回あたり・円）。
-   * 管理人が特設サイト編集画面で設定する。未設定（null）は 0 円
+   * 主催者が特設サイト編集画面で設定する。未設定（null）は 0 円
    * （無料）として扱う。設定する場合は PUSH_PRICE_MIN〜PUSH_PRICE_MAX
-   * の整数。支払い（有料時）と管理人の承認を経て配信される
+   * の整数。支払い（有料時）と主催者の承認を経て配信される
    * （実体は lib/event-charges.ts / lib/event-push-request.ts）。
    * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
    * null（＝無料）に倒す。
@@ -224,11 +224,11 @@ export interface EventConfig {
   pushPrice: number | null;
   /**
    * 参加店の自己登録（公開の登録ページ）で店が払う月額料金（円）。
-   * 管理人が特設サイト編集画面で設定する。未設定（null）の間は自己登録を
+   * 主催者が特設サイト編集画面で設定する。未設定（null）の間は自己登録を
    * 受け付けない。0 は「無料」: 支払いなしで登録が完了する。有料の間は
-   * 管理人自身の Stripe で支払いが確認できてから参加店レコードが作られる
+   * 主催者自身の Stripe で支払いが確認できてから参加店レコードが作られる
    * （実体は lib/event-apply.ts）。登録後の課金レコード（shopBillings）の
-   * monthlyAmount にはこの金額が入る（管理人発行で店ごとに決める月額と
+   * monthlyAmount にはこの金額が入る（主催者発行で店ごとに決める月額と
    * 同じ置き場）。導入前に作られたプロジェクトには項目自体が無いため、
    * 読み取り時は null（受け付けない）に倒す。
    */
@@ -278,11 +278,11 @@ export const MAX_CONCURRENT_EVENTS = 3;
 export const MAX_INFO_PDFS = 5;
 export const MAX_EVENT_LINKS = 3;
 export const DEFAULT_RESET_TIME = '00:00';
-/** 町おこし: プロジェクトは常設。終了日を持たないことを表す番兵値（終了処理は走らない）。 */
+/** スタンプラリー: プロジェクトは常設。終了日を持たないことを表す番兵値（終了処理は走らない）。 */
 export const PERMANENT_END_DATE = '9999-12-31';
 /** スタンプカードの枠の最大数（達成個数の上限）。 */
 export const MAX_STAMP_SLOTS = 10;
-/** スタンプの達成個数の既定値（管理人が未設定のプロジェクト）。 */
+/** スタンプの達成個数の既定値（主催者が未設定のプロジェクト）。 */
 export const DEFAULT_STAMP_GOAL_COUNT = 5;
 /** スタンプ達成特典の種類の既定値（従来の「1軒無料」）。 */
 export const DEFAULT_STAMP_REWARD_TYPE: StampRewardType = 'free-dish';
@@ -290,7 +290,7 @@ export const DEFAULT_STAMP_REWARD_TYPE: StampRewardType = 'free-dish';
 export const STAMP_BENEFIT_TEXT_MAX_LENGTH = 100;
 /** 週次ランキングの最低レビュー件数の上限。 */
 export const MAX_RANKING_MIN_REVIEWS = 20;
-/** 週次ランキングの最低レビュー件数の既定値（管理人が未設定のプロジェクト）。 */
+/** 週次ランキングの最低レビュー件数の既定値（主催者が未設定のプロジェクト）。 */
 export const DEFAULT_RANKING_MIN_REVIEWS = 3;
 export const DEFAULT_BACKUP_RETENTION_DAYS = 30;
 export const DEFAULT_RESET_MODE: EventResetMode = 'full-daily';
@@ -665,7 +665,7 @@ export const REVIEW_CATEGORY_MAX_COUNT = 6;
 export const REVIEW_CATEGORY_LABEL_MAX_LENGTH = 10;
 /**
  * レビューの項目別評価の既定の項目（従来の固定4項目）。
- * 管理人が項目を変えていないプロジェクトはこの並びになる。
+ * 主催者が項目を変えていないプロジェクトはこの並びになる。
  */
 export const DEFAULT_REVIEW_CATEGORIES: string[] = [
   '味',
@@ -728,7 +728,7 @@ export function normalizeReviewCategories(input: unknown): string[] {
 /** ログインボーナスの達成日数の下限・上限（累計日数）。 */
 export const LOGIN_BONUS_DAYS_MIN = 5;
 export const LOGIN_BONUS_DAYS_MAX = 20;
-/** ログインボーナスの達成日数の既定値（管理人が未設定のプロジェクト）。 */
+/** ログインボーナスの達成日数の既定値（主催者が未設定のプロジェクト）。 */
 export const DEFAULT_LOGIN_BONUS_DAYS = 7;
 
 /** ログインボーナス ON/OFF を防御的に読む（読み取り用）。true のみ有効。 */
@@ -770,7 +770,7 @@ export function parseLoginBonusDays(value: unknown): number {
 
 /** 広告の掲載枠数の上限。 */
 export const MAX_AD_SLOTS = 50;
-/** 広告の掲載枠数の既定値（管理人が未設定のプロジェクト）。 */
+/** 広告の掲載枠数の既定値（主催者が未設定のプロジェクト）。 */
 export const DEFAULT_AD_SLOTS = 5;
 
 /** 広告 ON/OFF を防御的に読む（読み取り用）。true のみ有効。 */

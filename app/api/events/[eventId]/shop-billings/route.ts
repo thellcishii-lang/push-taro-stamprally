@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/shop-billings/route.ts
-// 店舗課金オプション: 店ごとの課金状態一覧と収支サマリ（管理人）。
+// 店舗課金オプション: 店ごとの課金状態一覧と収支サマリ（主催者）。
 // 状態・合計はすべてローカル記録（Webhook で蓄積した Firestore）が正で、
 // Stripe API へは問い合わせない。
 // オプション OFF の契約では 404 にして機能の存在自体を隠す。
@@ -50,7 +50,7 @@ export async function GET(
         // 停止から3ヶ月を過ぎると閉店扱いになり新規登録が通る。
         delistedAt: exhibitor.delistedAt,
         closedAt: exhibitor.closedAt,
-        // 登録の入口（管理人発行 'admin' / 自己申込 'self'）
+        // 登録の入口（主催者発行 'admin' / 自己申込 'self'）
         source: exhibitor.source,
       })),
     billings,

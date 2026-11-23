@@ -3,7 +3,7 @@
 // 実行できるのは参加店セッションだけ（自店分のみ）。
 // GET: プロジェクトの広告設定・課金状態・自店の広告（掲載版／申請版）を返す。
 // PUT: 内容を検証して「申請中（pending）」として保存する。掲載中（live）
-// は管理人が承認するまで変わらない（lib/event-ads.ts）。
+// は主催者が承認するまで変わらない（lib/event-ads.ts）。
 // 料金 0（無料）の間は課金を一切見ず、承認だけで掲載される。
 import { NextResponse } from 'next/server';
 import { requireEventExhibitor } from '@/lib/event-auth';
@@ -36,7 +36,7 @@ export async function GET(
     getAdPlacement(db, eventId, exhibitor.id),
     resolveAdsOptionEnabled(event.ownerUid),
   ]);
-  // 広告オプション（管理人の契約）が無効な間は、プロジェクト設定が
+  // 広告オプション（主催者の契約）が無効な間は、プロジェクト設定が
   // ON でも広告機能はすべて止まる（申請・申込・掲載のいずれも不可）。
   const adsUsable = isAdsActionAllowed('submit', {
     adsOptionEnabled,
@@ -60,7 +60,7 @@ export async function GET(
   return NextResponse.json({
     // プロジェクトの広告設定（公開情報と同じ値）
     enabled: event.adsEnabled,
-    // 広告オプション（管理人の契約）が有効かどうか
+    // 広告オプション（主催者の契約）が有効かどうか
     optionEnabled: adsOptionEnabled,
     price: event.adsPrice,
     slots: event.adsSlots,
@@ -94,7 +94,7 @@ export async function PUT(
       { status: 403 },
     );
   }
-  // 広告オプション（管理人の契約）が無効な間は申請できない。
+  // 広告オプション（主催者の契約）が無効な間は申請できない。
   const adsOptionEnabled = await resolveAdsOptionEnabled(event.ownerUid);
   if (
     !isAdsActionAllowed('submit', {

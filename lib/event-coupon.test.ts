@@ -179,10 +179,10 @@ describe('parseExhibitorKind（アカウントの種類）', () => {
 });
 
 describe('parseCouponIssuedBy（クーポンの発行元）', () => {
-  it("'shop' だけを店舗発行とし、それ以外は管理人発行に倒す", () => {
+  it("'shop' だけを店舗発行とし、それ以外は主催者発行に倒す", () => {
     expect(parseCouponIssuedBy('shop')).toBe('shop');
     expect(parseCouponIssuedBy('admin')).toBe('admin');
-    // 旧ドキュメント（項目なし）は管理人発行
+    // 旧ドキュメント（項目なし）は主催者発行
     expect(parseCouponIssuedBy(undefined)).toBe('admin');
     expect(parseCouponIssuedBy(null)).toBe('admin');
     expect(parseCouponIssuedBy('other')).toBe('admin');

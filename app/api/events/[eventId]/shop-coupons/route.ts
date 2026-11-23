@@ -2,7 +2,7 @@
 // 参加店向け: 自店のクーポン一覧と、自店クーポンの発行。
 // 発行手数料（プロジェクト設定 couponIssuePrice、1件あたり）:
 // - 無料（0円・未設定）: 発行したクーポンはそのまま有効になる。
-// - 有料: クーポンは支払い待ち（非公開・取得不可）で作られ、管理人
+// - 有料: クーポンは支払い待ち（非公開・取得不可）で作られ、主催者
 //   自身の Stripe の Checkout で支払うと有効になる。支払いの反映は
 //   戻り時の照会（shop-charges/verify）と Webhook の2経路で冪等。
 // exhibitorId はセッションから決める（他店の分は作れない）。
@@ -94,7 +94,7 @@ export async function POST(
   const fee = couponIssueFeeOf(event);
   const paid = chargeRequiresPayment(fee);
 
-  // 有料のときは、先に課金レール（管理人の Stripe）が使えることを
+  // 有料のときは、先に課金レール（主催者の Stripe）が使えることを
   // 確認してから作る（支払えないクーポンを量産しないため）。
   let contractId: string | null = null;
   if (paid) {

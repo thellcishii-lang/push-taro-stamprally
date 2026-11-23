@@ -1,13 +1,13 @@
 // lib/event-billing.ts
-// Push-taro 町おこし の店舗課金システム（別料金オプション）。
+// Push-taro.スタンプラリー の店舗課金システム（別料金オプション）。
 //
 // 設計の柱:
 // - データ元は Firestore のみ。このモジュールが課金の正を持つ。
-// - 使うのは「管理人自身の Stripe」。管理人が自分の Stripe の
+// - 使うのは「主催者自身の Stripe」。主催者が自分の Stripe の
 //   APIキー（シークレットキー）と Webhook シークレットを管理画面から
 //   登録し、サーバー専用ドキュメント organizers/{contractId}/billing/stripe
 //   にだけ保持する。キーの値は UI・API レスポンスに一切出さない。
-// - Stripe の商品・価格は事前に作らない。店ごとの月額は管理人が決め、
+// - Stripe の商品・価格は事前に作らない。店ごとの月額は主催者が決め、
 //   決済のたびに金額を API で指定して Checkout セッションを作る。
 // - 支払い状態は Stripe Webhook のローカル記録が正。Stripe API への
 //   都度問い合わせには依存しない。
@@ -30,7 +30,7 @@ import { resolveAppOrigin } from './app-origin';
 
 export const SHOP_BILLINGS_COLLECTION = 'shopBillings';
 export const BILLING_PAYMENTS_COLLECTION = 'billingPayments';
-/** 支払い失敗の管理人通知の送信済みマーカー（請求書IDがドキュメントID）。 */
+/** 支払い失敗の主催者通知の送信済みマーカー（請求書IDがドキュメントID）。 */
 export const BILLING_FAILURE_NOTICES_COLLECTION = 'billingFailureNotices';
 const BILLING_SETTINGS_SUBCOLLECTION = 'billing';
 const BILLING_SETTINGS_DOC_ID = 'stripe';
@@ -47,7 +47,7 @@ export interface ShopBilling {
   exhibitorId: string;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
-  /** 月額（円）。管理人が店ごとに設定する */
+  /** 月額（円）。主催者が店ごとに設定する */
   monthlyAmount: number;
   status: ShopBillingStatus;
   /** 現在の課金期間の終了（ISO文字列）。不明なら null */
@@ -55,7 +55,7 @@ export interface ShopBilling {
   /** 店に渡す支払いページ（Checkout）の URL。発行時のみ */
   checkoutUrl: string | null;
   checkoutSessionId: string | null;
-  /** 管理人が解約操作をした記録。Webhook の deleted で誤停止しないため */
+  /** 主催者が解約操作をした記録。Webhook の deleted で誤停止しないため */
   canceledByAdmin: boolean;
   updatedAt: string;
 }
@@ -497,7 +497,7 @@ export function effectFromStripeEvent(
 
 // ─── Stripe クライアント ───
 
-/** 管理人の保存キーから Stripe クライアントを作る。 */
+/** 主催者の保存キーから Stripe クライアントを作る。 */
 export function createStripeClient(secretKey: string): Stripe {
   return new Stripe(secretKey);
 }
@@ -920,10 +920,10 @@ export function buildBillingSummaryCsv(summary: BillingSummary): string {
   return '\uFEFF' + lines.join('\r\n') + '\r\n';
 }
 
-// ─── 支払い失敗の管理人通知 ───
+// ─── 支払い失敗の主催者通知 ───
 //
 // 運用（2026-11-17 Ishii の仕様）: 店の月額の支払いが期日に失敗したら、
-// 管理人にメールで知らせる。管理人はそれを見て店へ連絡し、期限までに
+// 主催者にメールで知らせる。主催者はそれを見て店へ連絡し、期限までに
 // 払われなければ掲載が止まる（掲載停止自体は Stripe のリトライが尽きた
 // 時点で Webhook が自動で行う）。通知は請求書ごとに1回だけ:
 // billingFailureNotices/{invoiceId} を create できた場合だけ送る
@@ -945,9 +945,9 @@ export function buildBillingFailureNoticeEmail(input: {
 }): { subject: string; html: string } {
   const eventPart = input.eventName
     ? `プロジェクト「${escapeNoticeHtml(input.eventName)}」`
-    : 'Push-taro 町おこし のプロジェクト';
+    : 'Push-taro.スタンプラリー のプロジェクト';
   return {
-    subject: '【Push-taro 町おこし】参加店のお支払い失敗のお知らせ',
+    subject: '【Push-taro.スタンプラリー】参加店のお支払い失敗のお知らせ',
     html: `
 <p>${eventPart}の参加店「${escapeNoticeHtml(input.shopName)}」様の月額料金のお支払いが失敗しました。</p>
 <p>請求額: ${input.amount.toLocaleString()}円</p>
@@ -965,7 +965,7 @@ export type BillingFailureMailSender = (args: {
 }) => Promise<{ success: boolean; error?: string }>;
 
 /**
- * 支払い失敗を管理人へ通知する（請求書ごとに1回だけ）。
+ * 支払い失敗を主催者へ通知する（請求書ごとに1回だけ）。
  * 送信できたら true、既に通知済みなら false を返す。
  * メール送信に失敗した場合はマーカーを取り消し、次の失敗イベントで
  * 再度通知できるようにする（通知の取りこぼし防止）。
@@ -1024,7 +1024,7 @@ export async function notifyBillingFailureOnce(
 // ─── オプション有効な契約者の解決 ───
 
 /**
- * ログイン中の管理人（ownerUid）から、店舗課金オプションが有効な
+ * ログイン中の主催者（ownerUid）から、店舗課金オプションが有効な
  * 契約者レコードを引く。契約者でない／オプション OFF なら null。
  * API 側は null のとき 404 にして機能の存在自体を隠す。
  */
@@ -1102,7 +1102,7 @@ export async function startShopBilling(
           currency: 'jpy',
           unit_amount: input.monthlyAmount,
           recurring: { interval: 'month' },
-          product_data: { name: 'Push-taro.町おこし 参加店 月額料金' },
+          product_data: { name: 'Push-taro.スタンプラリー 参加店 月額料金' },
         },
       },
     ],
@@ -1140,8 +1140,8 @@ export type CancelShopBillingResult =
 /**
  * 店の課金を解約する。先に canceledByAdmin を立ててから Stripe 側を
  * 止める（Webhook の customer.subscription.deleted が届いても、
- * 管理人の操作による解約では掲載停止にしないため）。
- * 管理人の解約では掲載は止めない（未払い確定による停止とは扱いが違う）。
+ * 主催者の操作による解約では掲載停止にしないため）。
+ * 主催者の解約では掲載は止めない（未払い確定による停止とは扱いが違う）。
  */
 export async function cancelShopBilling(
   db: Firestore,
@@ -1235,7 +1235,7 @@ export interface ApplyStripeWebhookResult {
  *   から Stripe の顧客／サブスクリプション ID で引く。
  * - 冪等性: 支払い記録は Stripe イベントIDをドキュメントIDにして
  *   create するため、同じイベントの再送では二重に記録・適用しない。
- * - 管理人が解約操作をしたサブスクリプションの canceled では、
+ * - 主催者が解約操作をしたサブスクリプションの canceled では、
  *   掲載停止にしない（未払い確定による終了と区別する）。
  */
 export async function applyStripeWebhookEffect(
@@ -1318,7 +1318,7 @@ export async function applyStripeWebhookEffect(
     await setShopDelistedAt(db, eventId, exhibitorId, null);
   }
 
-  // 支払い失敗は管理人へメールで知らせる（請求書ごとに1回だけ）。
+  // 支払い失敗は主催者へメールで知らせる（請求書ごとに1回だけ）。
   // 通知の失敗で Webhook の処理自体は失敗にしない。
   if (
     event.type === 'invoice.payment_failed' &&

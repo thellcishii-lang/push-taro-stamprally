@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/ads/[exhibitorId]/reject/route.ts
-// 広告の却下（管理人だけ）。申請中（pending）の版は破棄され、
+// 広告の却下（主催者だけ）。申請中（pending）の版は破棄され、
 // 掲載中（live）の版はそのまま残る。申請中が無ければ 409。
 import { NextResponse } from 'next/server';
 import { requireEventOwner } from '@/lib/event-auth';

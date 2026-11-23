@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/social-queue-keys/[keyId]/route.ts
-// 連携キーの失効（管理人）。失効したキーはその場で使えなくなる。
+// 連携キーの失効（主催者）。失効したキーはその場で使えなくなる。
 // キーが漏れた可能性があるときは、失効して新しいキーを発行する。
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';

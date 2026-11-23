@@ -19,37 +19,47 @@ buildConfig:
 # Do not deploy a partial index list with deletion/force options.
 env:
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: AIzaSyC3OQwAVStMx3Ak7xjKlSqt_HjxwK_BxhA
+    value: AIzaSyBNR3CaIt5Bl5k6wmCgGi2tq2i2Cbwoeek
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: push-taro-machiokoshi.firebaseapp.com
+    value: push-taro-stamprally.firebaseapp.com
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: push-taro-machiokoshi
+    value: push-taro-stamprally
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: push-taro-machiokoshi.firebasestorage.app
+    value: push-taro-stamprally.firebasestorage.app
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: "896726381284"
+    value: "504443385601"
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: "1:896726381284:web:803881394acfce9dd2f2f1"
+    value: "1:504443385601:web:7770189a866257946fcd00"
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_VAPID_KEY
-    value: BIyqPrdtrG8Ig8COh2RZh_-4IrZXKN4FS7LeSbFF_73seAd8BTZ_DgIXXPhNMbA1hvOp_zY5UDKzdrRhvPLFGW8
+    value: BHUa5JSl4Wo_NUFmIrh9wuMtomCeu7XmEfsIUW0HQQJwAZB8zEV-WuDGbzsG7hXd-v4Bj_UZyQvQqfoI1CWe23Y
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: FIREBASE_PROJECT_ID
+    value: push-taro-stamprally
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: FIREBASE_CLIENT_EMAIL
+    value: firebase-adminsdk-fbsvc@push-taro-stamprally.iam.gserviceaccount.com
     availability:
       - BUILD
       - RUNTIME

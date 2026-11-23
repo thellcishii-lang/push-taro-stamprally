@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/shop-billings/export/route.ts
-// 店舗課金オプション: 入金一覧の CSV ダウンロード（管理人）。
+// 店舗課金オプション: 入金一覧の CSV ダウンロード（主催者）。
 // 画面の直近50件ではなく、支払い記録の全件を店名・登録住所・種別つきで
 // 返す（経理・収支への取り込み用）。並びと整形は
 // lib/event-billing.ts の buildBillingPaymentsCsv が担う。

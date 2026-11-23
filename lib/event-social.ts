@@ -1,11 +1,11 @@
 // lib/event-social.ts
-// Push-taro 町おこし の Instagram 投稿キュー基盤（events/{eventId} 配下）。
+// Push-taro.スタンプラリー の Instagram 投稿キュー基盤（events/{eventId} 配下）。
 //
 // 仕様（2026-11-14 Ishii 決定）:
-// - 投稿の起点は特設サイト／管理画面。管理人が投稿を作ると
+// - 投稿の起点は特設サイト／管理画面。主催者が投稿を作ると
 //   「投稿待ちキュー」（socialPosts、status='queued'）に入る。
-// - 実際の Instagram 投稿は製品ではなく **管理人自身の Muse** が行う
-//   （製品に Graph API は組まない）。管理人の Muse が朝・昼・夜に
+// - 実際の Instagram 投稿は製品ではなく **主催者自身の Muse** が行う
+//   （製品に Graph API は組まない）。主催者の Muse が朝・昼・夜に
 //   キュー確認 API を叩き、未投稿分を Instagram に投稿して、
 //   完了 API で「投稿済み」（status='posted'）を付けに来る。
 // - Muse 用 API の認証はプロジェクトごとの「連携キー」。

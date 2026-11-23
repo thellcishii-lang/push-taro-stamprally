@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/shop-billings/summary/route.ts
-// 店舗課金オプション: 入金の集計（管理人）。集計レポート画面が使う。
+// 店舗課金オプション: 入金の集計（主催者）。集計レポート画面が使う。
 // 明細CSV（生データ）とは別に、日次・月次・年次・店舗別月次へ畳んだ
 // 集計を返す。集計は lib/event-billing.ts の summarizeBillingPayments。
 // オプション OFF の契約では 404（明細 API と同じ）。

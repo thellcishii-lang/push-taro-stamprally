@@ -121,7 +121,7 @@ describe('evaluateCheckin', () => {
   });
 
   it('目標日数を下げたあとのチェックインで、余りを持ったまま達成する', () => {
-    // 目標 7 で 6 日貯めたあと、管理人が目標を 5 に下げたケース。
+    // 目標 7 で 6 日貯めたあと、主催者が目標を 5 に下げたケース。
     // 次のチェックインで 7 日分 → 達成1回＋余り 2 日が次サイクルに残る。
     const result = evaluateCheckin(
       state({ countInCycle: 6, lastCheckinDate: '2026-11-16' }),

@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/shop-billings/summary/export/route.ts
-// 店舗課金オプション: 集計CSVのダウンロード（管理人）。
+// 店舗課金オプション: 集計CSVのダウンロード（主催者）。
 // 日次・月次・年次・店舗別月次の集計を、セクション見出しつきの
 // 1ファイルで返す（集計ソフトへの取り込み・月次締め用）。
 // 整形は lib/event-billing.ts の buildBillingSummaryCsv が担う。

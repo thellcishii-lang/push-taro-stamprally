@@ -1,6 +1,6 @@
 // app/api/events/[eventId]/shop-billings/[exhibitorId]/cancel/route.ts
-// 店舗課金オプション: 店の課金を解約する（管理人）。Stripe 側の
-// サブスクリプションも止める。管理人の操作による解約では掲載は
+// 店舗課金オプション: 店の課金を解約する（主催者）。Stripe 側の
+// サブスクリプションも止める。主催者の操作による解約では掲載は
 // 止めない（掲載停止は未払い確定のときに Webhook 経由で行う）。
 // オプション OFF の契約では 404 にして機能の存在自体を隠す。
 import { NextResponse } from 'next/server';

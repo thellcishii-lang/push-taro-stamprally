@@ -1,7 +1,7 @@
 'use client';
 
 // app/e/[eventId]/page.tsx
-// Push-taro 町おこし の来場者登録画面（QRコードの着地先）。
+// Push-taro.スタンプラリー の来場者登録画面（QRコードの着地先）。
 // 本人確認の方式は契約のデータ上のスイッチ（公開APIの smsAuthEnabled）で
 // 切り替わる。画面に切り替え UI は無い:
 // - SMSオン: プロジェクト情報の確認 → 電話番号のSMS認証 → 通知許可と
@@ -1550,7 +1550,7 @@ export default function EventVisitorPage() {
       <main style={containerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <PinLogo />
-          <p style={{ fontSize: 19, fontWeight: 900, color: INK, margin: 0 }}>Push-taro 町おこし</p>
+          <p style={{ fontSize: 19, fontWeight: 900, color: INK, margin: 0 }}>Push-taro.スタンプラリー</p>
         </div>
         <h1 style={{ fontSize: 20, fontWeight: 800, marginTop: 24 }}>{uiText(locale, 'notFoundTitle')}</h1>
         <p style={{ fontSize: 14 }}>{uiText(locale, 'notFoundBody')}</p>

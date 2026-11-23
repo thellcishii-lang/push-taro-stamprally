@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/social-posts/route.test.ts
-// 投稿キューの管理人 API: 所有者ガードと入力検証（実物の純粋関数）を
+// 投稿キューの主催者 API: 所有者ガードと入力検証（実物の純粋関数）を
 // 通して lib の作成／一覧につながることを検証する。
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';

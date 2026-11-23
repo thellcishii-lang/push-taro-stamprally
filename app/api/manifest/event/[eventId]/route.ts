@@ -29,7 +29,7 @@ export async function GET(
 
   const pagePath = `/e/${eventId}`;
   const manifest = {
-    name: eventName ? `${eventName}｜Push-taro 町おこし` : 'Push-taro 町おこし',
+    name: eventName ? `${eventName}｜Push-taro.スタンプラリー` : 'Push-taro.スタンプラリー',
     short_name: eventName || 'EVENT',
     id: pagePath,
     start_url: pagePath,

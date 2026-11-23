@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/site-settings/route.ts
-// 特設サイト（本家上の公開ページ）の表示内容の取得・保存（管理人本人だけ）。
+// 特設サイト（本家上の公開ページ）の表示内容の取得・保存（主催者本人だけ）。
 // 保存先はプロジェクトドキュメントのトップレベル項目
 // （siteDescription / gourmetDefinition / heroImageUrl / siteIconUrl /
 // themeColor / siteNotes / topPlacementEnabled / topPlacementPrice /

@@ -1,7 +1,7 @@
 'use client';
 
 // app/event-admin/[eventId]/push/page.tsx
-// Push-taro 町おこし 管理画面①：即時プッシュ＋消込。
+// Push-taro.スタンプラリー 管理画面①：即時プッシュ＋消込。
 // 即時プッシュは campaigns API でその場で送信され、送信数（課金根拠）が履歴に残る。
 // 消込は主催者として全クーポン対象（出店者画面と違い自社制限なし）。
 // 画面の固定文は4言語辞書（lib/ui-text.ts の ADMIN_TEXT）。

@@ -1,7 +1,7 @@
 'use client';
 
 // app/event-admin/[eventId]/schedule/page.tsx
-// Push-taro 町おこし 管理画面②：予約配信。
+// Push-taro.スタンプラリー 管理画面②：予約配信。
 // 15分刻み（00/15/30/45分）で複数の予約を入れられる。実行は event-tick が担う。
 // 画面の固定文は4言語辞書（lib/ui-text.ts の ADMIN_TEXT）。
 // 見た目は承認済みモック準拠。ログイン後は共通シェル（components/AdminShell）

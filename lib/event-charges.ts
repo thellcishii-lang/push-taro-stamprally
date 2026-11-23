@@ -1,11 +1,11 @@
 // lib/event-charges.ts
-// Push-taro 町おこし の「参加店の単発課金」レール（クーポン発行・
+// Push-taro.スタンプラリー の「参加店の単発課金」レール（クーポン発行・
 // プッシュ配信申請の手数料）。
 //
 // 仕組み:
 // - 手数料はプロジェクト設定（couponIssuePrice / pushPrice、1件・
 //   1回あたり）。未設定・0円は無料で、課金自体が発生しない。
-// - 有料のときは「管理人自身の Stripe」（lib/event-billing.ts）で
+// - 有料のときは「主催者自身の Stripe」（lib/event-billing.ts）で
 //   都度払い（Checkout・mode: 'payment'）にする。月額のトップ掲載・
 //   広告（サブスクリプション）とは metadata.kind で区別する:
 //   'coupon-issue'（クーポン発行）/ 'push-send'（プッシュ配信申請）。
@@ -200,12 +200,12 @@ export type StartOneTimeChargeResult =
   | { ok: false; status: number; error: string };
 
 const CHARGE_PRODUCT_NAMES: Record<ChargeKind, string> = {
-  [COUPON_ISSUE_KIND]: 'Push-taro.町おこし クーポン発行手数料',
-  [PUSH_SEND_KIND]: 'Push-taro.町おこし プッシュ配信手数料',
+  [COUPON_ISSUE_KIND]: 'Push-taro.スタンプラリー クーポン発行手数料',
+  [PUSH_SEND_KIND]: 'Push-taro.スタンプラリー プッシュ配信手数料',
 };
 
 /**
- * 都度払いの Checkout セッションを発行する（管理人自身の Stripe）。
+ * 都度払いの Checkout セッションを発行する（主催者自身の Stripe）。
  * 戻り先は店舗ページ（?charge=success&session_id=...）。戻った店が
  * 照会 API を叩くことで支払いが反映される（Webhook でも冪等に反映）。
  */
@@ -370,7 +370,7 @@ export type VerifyChargeResult =
   | { ok: false; status: number; error: string };
 
 /**
- * 店が Checkout から戻ったときの検証: 管理人の Stripe でセッションを
+ * 店が Checkout から戻ったときの検証: 主催者の Stripe でセッションを
  * 照会し、支払い済みで、metadata の所属（プロジェクト・参加店）が
  * 呼び出し側と一致することを確認してから反映する。
  * 未払い（決済を完了していない）場合は 402 で返す。

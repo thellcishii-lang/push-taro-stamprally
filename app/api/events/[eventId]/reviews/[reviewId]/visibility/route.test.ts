@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/reviews/[reviewId]/visibility/route.test.ts
-// レビューの表示切り替え API: プロジェクト所有者（管理人）だけが
+// レビューの表示切り替え API: プロジェクト所有者（主催者）だけが
 // 実行できることを検証する。参加店・来場者はこの API を通れない
 // （ガードは requireEventOwner）。
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -49,7 +49,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/events/[eventId]/reviews/[reviewId]/visibility', () => {
-  it('管理人は非表示にできる', async () => {
+  it('主催者は非表示にできる', async () => {
     mocks.setReviewVisibility.mockResolvedValue({
       ok: true,
       reviewId: REVIEW_ID,
@@ -65,7 +65,7 @@ describe('POST /api/events/[eventId]/reviews/[reviewId]/visibility', () => {
     expect(body).toMatchObject({ ok: true, visible: false });
   });
 
-  it('管理人以外（ガードの 403）は切り替えられない', async () => {
+  it('主催者以外（ガードの 403）は切り替えられない', async () => {
     mocks.requireEventOwner.mockResolvedValue({
       error: NextResponse.json({ error: '権限がありません' }, { status: 403 }),
     });

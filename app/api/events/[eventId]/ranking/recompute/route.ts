@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/ranking/recompute/route.ts
-// 週次ランキングの手動再計算（管理人だけ）。tick の自動補完を待たずに
+// 週次ランキングの手動再計算（主催者だけ）。tick の自動補完を待たずに
 // 特定の週を計算し直すための運用 API。
 // body の weekStart（'YYYY-MM-DD'）があれば、その日を含む週を対象に
 // する。無ければ「直近で完了した週」（先週）を対象にする。

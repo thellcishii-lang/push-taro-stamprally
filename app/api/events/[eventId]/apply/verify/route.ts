@@ -1,6 +1,6 @@
 // app/api/events/[eventId]/apply/verify/route.ts
 // 自己申込の Checkout からの戻りの検証（公開・認証なし）。
-// セッション ID は申込者だけに渡る控えであり、サーバーが管理人の
+// セッション ID は申込者だけに渡る控えであり、サーバーが主催者の
 // Stripe で照会して支払い済みを確認してから実体化する
 // （Webhook でも同じ実体化が冪等に行われる）。
 import { NextResponse } from 'next/server';

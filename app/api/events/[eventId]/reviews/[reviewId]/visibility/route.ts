@@ -1,6 +1,6 @@
 // app/api/events/[eventId]/reviews/[reviewId]/visibility/route.ts
-// レビューの表示／非表示の切り替え。プロジェクト所有者（管理人）だけ。
-// 不適切なレビューを管理人が非表示にするための操作で、参加店は触れない。
+// レビューの表示／非表示の切り替え。プロジェクト所有者（主催者）だけ。
+// 不適切なレビューを主催者が非表示にするための操作で、参加店は触れない。
 import { NextResponse } from 'next/server';
 import { requireEventOwner } from '@/lib/event-auth';
 import { db } from '@/lib/firebase-admin';

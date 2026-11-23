@@ -4,7 +4,7 @@
 // 一時上げのリバートで購読者枠が戻る際、開催中プロジェクトの登録者数が
 // 戻し先の枠をすでに超えている場合に表示する警告バナー。
 // 警告が無い（または取得に失敗した）場合は何も描画しない。
-// 延長操作は町おこし側では行わず、本家のプラン画面へ誘導する。
+// 延長操作はスタンプラリー側では行わず、本家のプラン画面へ誘導する。
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase-client';
@@ -13,7 +13,7 @@ import { openHonkeLink } from '@/lib/honke-handoff-client';
 import type { Locale } from '@/lib/i18n';
 import type { CapWarning } from '@/lib/cap-warning';
 
-const HONKE_SHOP_URL = 'https://push-taro.com/machiokoshi-account';
+const HONKE_SHOP_URL = 'https://push-taro.com/stamprally-account';
 
 const DATE_LOCALES: Record<Locale, string> = {
   ja: 'ja-JP',

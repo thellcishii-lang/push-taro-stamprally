@@ -518,7 +518,7 @@ export const UI_TEXT = {
     ko: '사진 업로드에 실패했습니다',
   },
   reviewHiddenNote: {
-    ja: 'この書き込みは管理人により非表示になっています',
+    ja: 'この書き込みは主催者により非表示になっています',
     en: 'This review is hidden by the organizer',
     zh: '该点评已被主办方隐藏',
     ko: '이 후기는 운영자에 의해 숨겨졌습니다',
@@ -656,7 +656,7 @@ export const UI_TEXT = {
     ko: '입장용 QR',
   },
   admissionQrIntro: {
-    ja: '管理人から受け取った入場用QRコードを読み込むと、この画面に保存して入場時に表示できます。',
+    ja: '主催者から受け取った入場用QRコードを読み込むと、この画面に保存して入場時に表示できます。',
     en: 'Scan the admission QR code you received from the organizer to save it here and show it at the entrance.',
     zh: '扫描主办方发放的入场二维码，即可保存到此页面并在入场时出示。',
     ko: '주최자로부터 받은 입장용 QR 코드를 읽으면 이 화면에 저장해 입장 시 제시할 수 있습니다.',
@@ -698,7 +698,7 @@ export const UI_TEXT = {
     ko: '입장 시 이 QR 코드를 제시해 주세요',
   },
   admissionQrScanHint: {
-    ja: '管理人から受け取った入場用QRコードをカメラに向けてください',
+    ja: '主催者から受け取った入場用QRコードをカメラに向けてください',
     en: 'Point the camera at the admission QR code you received',
     zh: '请将收到的入场二维码对准摄像头',
     ko: '받은 입장용 QR 코드를 카메라에 비춰 주세요',
@@ -812,7 +812,7 @@ export const UI_TEXT = {
     ko: '광고 신청',
   },
   applyAdLead: {
-    ja: '「{eventName}」の特設サイトに広告を掲載します。お申し込みが完了すると、広告編集画面へのログイン情報をメールでお送りします。広告の内容は管理人の確認後に掲載されます。',
+    ja: '「{eventName}」の特設サイトに広告を掲載します。お申し込みが完了すると、広告編集画面へのログイン情報をメールでお送りします。広告の内容は主催者の確認後に掲載されます。',
     en: 'Place an ad on the "{eventName}" special site. When your application is complete, we will email you login details for the ad editor. Your ad will be published after the organizer reviews it.',
     zh: '在“{eventName}”特设网站上投放广告。申请完成后，我们会通过电子邮件发送广告编辑页面的登录信息。广告内容经主办方确认后发布。',
     ko: '"{eventName}" 특설 사이트에 광고를 게재합니다. 신청이 완료되면 광고 편집 화면 로그인 정보를 이메일로 보내드립니다. 광고 내용은 관리자 확인 후 게재됩니다.',
@@ -1016,7 +1016,7 @@ export const REDEEM_TEXT = {
     ko: '출점자 정보를 가져오지 못했습니다',
   },
   exhibitorErrorNote: {
-    ja: '。管理人に登録状況を確認してください。',
+    ja: '。主催者に登録状況を確認してください。',
     en: '. Please ask the organizer to check your registration.',
     zh: '。请向主办方确认您的登记状态。',
     ko: '. 주최자에게 등록 상태를 확인해 주세요.',
@@ -1592,7 +1592,7 @@ export const REDEEM_TEXT = {
     ko: '특설 사이트 광고',
   },
   adNote: {
-    ja: '特設サイトの広告ページにお店の宣伝を出せます。内容はお店の自由な宣伝で構いません。掲載には管理人の承認が必要です。',
+    ja: '特設サイトの広告ページにお店の宣伝を出せます。内容はお店の自由な宣伝で構いません。掲載には主催者の承認が必要です。',
     en: 'You can advertise your shop on the special site’s ad page. The content can be any promotion for your shop. Ads go live after the organizer approves them.',
     zh: '可以在特设网站的广告页面宣传本店。内容可以是店铺的自由宣传。发布前需要管理人批准。',
     ko: '특설 사이트의 광고 페이지에 매장 홍보를 낼 수 있습니다. 내용은 매장의 자유로운 홍보면 됩니다. 게재에는 관리인의 승인이 필요합니다.',
@@ -1664,7 +1664,7 @@ export const REDEEM_TEXT = {
     ko: '광고 내용',
   },
   adFormNote: {
-    ja: '保存すると管理人の承認待ちになります。掲載中の広告は、承認されるまで今の内容のまま表示されます。',
+    ja: '保存すると主催者の承認待ちになります。掲載中の広告は、承認されるまで今の内容のまま表示されます。',
     en: 'Saving sends the content for the organizer’s approval. Your current live ad stays as it is until the new content is approved.',
     zh: '保存后将提交管理人审批。当前展示中的广告在新内容获批前保持不变。',
     ko: '저장하면 관리인 승인 대기가 됩니다. 게재 중인 광고는 승인될 때까지 지금 내용 그대로 표시됩니다.',
@@ -1700,7 +1700,7 @@ export const REDEEM_TEXT = {
     ko: '이 내용으로 신청하기',
   },
   adSubmittedMessage: {
-    ja: '申請しました。管理人の承認をお待ちください。',
+    ja: '申請しました。主催者の承認をお待ちください。',
     en: 'Submitted. Please wait for the organizer’s approval.',
     zh: '已提交申请。请等待管理人批准。',
     ko: '신청했습니다. 관리인의 승인을 기다려 주세요.',
@@ -1736,7 +1736,7 @@ export const REDEEM_TEXT = {
     ko: '아직 광고를 신청하지 않았습니다',
   },
   adFreeNote: {
-    ja: '料金は無料です。申し込みは不要で、内容を申請して管理人の承認を受けると掲載されます。',
+    ja: '料金は無料です。申し込みは不要で、内容を申請して主催者の承認を受けると掲載されます。',
     en: 'It’s free. No subscription is needed — just submit your content and get the organizer’s approval.',
     zh: '免费。无需签约，提交内容并获得管理人批准后即可展示。',
     ko: '요금은 무료입니다. 신청 절차 없이 내용을 제출하고 관리인 승인을 받으면 게재됩니다.',
@@ -1850,7 +1850,7 @@ export const REDEEM_TEXT = {
     ko: '푸시 발송 신청',
   },
   pushRequestNote: {
-    ja: 'このプロジェクトの購読者全員への配信を申請できます。管理人の承認後に配信されます。',
+    ja: 'このプロジェクトの購読者全員への配信を申請できます。主催者の承認後に配信されます。',
     en: 'You can request a notification to all subscribers of this project. It is sent after the organizer approves it.',
     zh: '可以申请向本项目的全部订阅者发送通知。管理人批准后发送。',
     ko: '이 프로젝트의 구독자 전원에게 보낼 발송을 신청할 수 있습니다. 관리인 승인 후 발송됩니다.',
@@ -1862,7 +1862,7 @@ export const REDEEM_TEXT = {
     ko: '발송 수수료: 1회 {price}엔',
   },
   pushRequestPaidNote: {
-    ja: 'お支払いが完了してから管理人の承認待ちになります。',
+    ja: 'お支払いが完了してから主催者の承認待ちになります。',
     en: 'Your request joins the approval queue once payment completes.',
     zh: '付款完成后进入管理人审批队列。',
     ko: '결제가 완료된 후 관리인 승인 대기가 됩니다.',
@@ -1886,7 +1886,7 @@ export const REDEEM_TEXT = {
     ko: '발송 신청하기',
   },
   pushRequestedMessage: {
-    ja: '申請しました。管理人の承認をお待ちください。',
+    ja: '申請しました。主催者の承認をお待ちください。',
     en: 'Submitted. Please wait for the organizer’s approval.',
     zh: '已提交申请。请等待管理人批准。',
     ko: '신청했습니다. 관리인의 승인을 기다려 주세요.',
@@ -1940,7 +1940,7 @@ export const REDEEM_TEXT = {
     ko: '결제가 확인되었습니다. 쿠폰이 활성화되었습니다.',
   },
   chargeSuccessPushMessage: {
-    ja: 'お支払いが確認できました。管理人の承認をお待ちください。',
+    ja: 'お支払いが確認できました。主催者の承認をお待ちください。',
     en: 'Payment confirmed. Please wait for the organizer’s approval.',
     zh: '已确认付款。请等待管理人批准。',
     ko: '결제가 확인되었습니다. 관리인의 승인을 기다려 주세요.',
@@ -1970,19 +1970,19 @@ export function redeemText(
   return lookup(REDEEM_TEXT, locale, key, params);
 }
 
-// ─── 管理人 管理画面 ───
+// ─── 主催者 管理画面 ───
 
 export const ADMIN_TEXT = {
   adminLoginTitle: {
-    ja: '町おこしプロジェクト 管理ログイン',
-    en: 'Machiokoshi Project admin login',
-    zh: '町おこし项目 管理登录',
+    ja: 'スタンプラリープロジェクト 管理ログイン',
+    en: 'Stamprally Project admin login',
+    zh: 'スタンプラリー项目 管理登录',
     ko: '마치오코시 프로젝트 관리 로그인',
   },
   adminTitle: {
-    ja: '町おこしプロジェクト設定',
-    en: 'Machiokoshi Project settings',
-    zh: '町おこし项目设置',
+    ja: 'スタンプラリープロジェクト設定',
+    en: 'Stamprally Project settings',
+    zh: 'スタンプラリー项目设置',
     ko: '마치오코시 프로젝트 설정',
   },
   emailLabel: {
@@ -2316,7 +2316,7 @@ export const ADMIN_TEXT = {
     ko: '입장용 QR(가져오기) 사용',
   },
   admissionQrNote: {
-    ja: 'オンにすると、来場者が管理人側の仕組みで発行された入場用QR（事前登録・チケット等）を自分の画面で読み込んで保存し、入場時に表示できます。',
+    ja: 'オンにすると、来場者が主催者側の仕組みで発行された入場用QR（事前登録・チケット等）を自分の画面で読み込んで保存し、入場時に表示できます。',
     en: 'When on, visitors can scan an admission QR issued by your own system (pre-registration, tickets, etc.), save it in this app, and show it at the entrance.',
     zh: '开启后，访客可将主办方系统发放的入场二维码（预登记、门票等）扫描保存到本页面，并在入场时出示。',
     ko: '켜면 방문객이 주최 측 시스템에서 발급된 입장용 QR(사전 등록, 티켓 등)을 스캔해 이 화면에 저장하고 입장 시 제시할 수 있습니다.',
@@ -2568,7 +2568,7 @@ export const ADMIN_TEXT = {
     ko: '발송에 실패했습니다',
   },
   organizerRedeemTitle: {
-    ja: 'クーポン消込（管理人）',
+    ja: 'クーポン消込（主催者）',
     en: 'Coupon redemption (organizer)',
     zh: '优惠券核销（主办方）',
     ko: '쿠폰 사용 처리(주최자)',
@@ -3090,7 +3090,7 @@ export const ADMIN_TEXT = {
     ko: 'PDF 등록에 실패했습니다',
   },
   organizerLinksTitle: {
-    ja: '管理人リンク',
+    ja: '主催者リンク',
     en: 'Organizer links',
     zh: '主办方链接',
     ko: '주최자 링크',
@@ -3330,7 +3330,7 @@ export const ADMIN_TEXT = {
     ko: '끄면 신규 신청과 특설 사이트 우선 표시가 중단되지만, 계약 중인 구독은 자동으로 해지되지 않습니다(해지는 참여 매장이 매장 페이지에서 합니다). 요금을 변경해도 계약 중인 금액은 바뀌지 않습니다.',
   },
   siteFreePriceNote: {
-    ja: '0円にすると無料になります。トップ掲載は課金なしで参加表明した店が対象になり、広告は管理人の承認だけで掲載されます。',
+    ja: '0円にすると無料になります。トップ掲載は課金なしで参加表明した店が対象になり、広告は主催者の承認だけで掲載されます。',
     en: 'Set the price to 0 to make it free. Top placement then features shops that opt in (no payment), and ads go live with your approval alone.',
     zh: '设为0日元即为免费。置顶展示将面向报名参加的店铺（无需付款），广告只需管理人批准即可展示。',
     ko: '0엔으로 하면 무료가 됩니다. 상단 게재는 결제 없이 참가 신청한 매장이 대상이 되고, 광고는 관리인 승인만으로 게재됩니다.',
@@ -3342,7 +3342,7 @@ export const ADMIN_TEXT = {
     ko: '광고',
   },
   siteAdsNote: {
-    ja: '特設サイトに広告ページができ、参加店が月額で広告を出せます。内容はラリーと無関係なお店の宣伝で構いません。掲載には管理人の承認が必要です（承認は「広告管理」画面で行います）。',
+    ja: '特設サイトに広告ページができ、参加店が月額で広告を出せます。内容はラリーと無関係なお店の宣伝で構いません。掲載には主催者の承認が必要です（承認は「広告管理」画面で行います）。',
     en: 'Adds an ad page to the special site where shops can run monthly ads. Content can be any shop promotion, unrelated to the rally. Ads need your approval (in the Ads screen) before they go live.',
     zh: '特设网站将增加广告页面，参与店铺可按月投放广告。内容可以是与集章活动无关的店铺宣传。展示前需要管理人批准（在"广告管理"页面进行）。',
     ko: '특설 사이트에 광고 페이지가 생겨 참여 매장이 월 단위로 광고를 낼 수 있습니다. 내용은 랠리와 무관한 매장 홍보여도 됩니다. 게재에는 관리인 승인이 필요합니다(승인은 "광고 관리" 화면에서).',
@@ -3384,7 +3384,7 @@ export const ADMIN_TEXT = {
     ko: '매장 유료 기능(쿠폰 발행・푸시 발송)',
   },
   siteShopChargesNote: {
-    ja: '参加店が店舗ページから自店のクーポンを発行したり、プッシュ配信を申請したりするときの手数料です。空欄または0円にすると無料になります。有料の間は、管理人のStripe設定（店舗課金オプション）で支払われます。プッシュ配信は料金にかかわらず管理人の承認後に配信されます。',
+    ja: '参加店が店舗ページから自店のクーポンを発行したり、プッシュ配信を申請したりするときの手数料です。空欄または0円にすると無料になります。有料の間は、主催者のStripe設定（店舗課金オプション）で支払われます。プッシュ配信は料金にかかわらず主催者の承認後に配信されます。',
     en: 'Fees charged when shops publish their own coupons or request a push notification from their shop page. Leave blank or set 0 to make them free. When paid, shops pay through your Stripe setup (shop billing option). Push requests are always sent only after your approval.',
     zh: '参与店铺从店铺页面发行本店优惠券或申请推送时的手续费。留空或设为0日元即免费。收费时通过管理人的Stripe设置（店铺收费选项）付款。推送无论是否收费，都在管理人批准后发送。',
     ko: '참여 매장이 매장 페이지에서 쿠폰을 발행하거나 푸시 발송을 신청할 때의 수수료입니다. 비워 두거나 0엔으로 하면 무료가 됩니다. 유료일 때는 관리인의 Stripe 설정(매장 과금 옵션)으로 결제됩니다. 푸시 발송은 요금과 관계없이 관리인 승인 후 발송됩니다.',
@@ -4761,7 +4761,7 @@ export const ADMIN_TEXT = {
 
 export type AdminTextKey = keyof typeof ADMIN_TEXT;
 
-/** 管理人 管理画面の固定文を言語で引く。 */
+/** 主催者 管理画面の固定文を言語で引く。 */
 export function adminText(
   locale: Locale,
   key: AdminTextKey,

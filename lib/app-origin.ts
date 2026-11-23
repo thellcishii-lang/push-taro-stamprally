@@ -28,7 +28,7 @@ export function eventVisitorUrl(eventId: string): string {
 
 /**
  * 参加店の自己登録ページの URL。どこからもリンクされていないため、
- * 管理人がこの URL を店へ直接渡して案内する（管理画面に表示する）。
+ * 主催者がこの URL を店へ直接渡して案内する（管理画面に表示する）。
  */
 export function eventShopApplyUrl(eventId: string): string {
   return `${resolveAppOrigin()}/e/${encodeURIComponent(eventId)}/apply`;

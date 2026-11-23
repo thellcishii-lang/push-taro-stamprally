@@ -116,8 +116,8 @@ export async function requireEventOwner(
 /**
  * 参加店セッションだけを対象にする API 用ガード（スタンプ・無料クーポン等、
  * 店だけが行う操作用）。
- * 認証なし=401、プロジェクトなし=404、管理人（所有者）=403
- * （管理人は店の操作を行わない）、それ以外の第三者=403 を返す。
+ * 認証なし=401、プロジェクトなし=404、主催者（所有者）=403
+ * （主催者は店の操作を行わない）、それ以外の第三者=403 を返す。
  */
 export async function requireEventExhibitor(
   request: Request,

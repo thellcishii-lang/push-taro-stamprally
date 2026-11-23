@@ -1,5 +1,5 @@
 // lib/event-info.ts
-// Push-taro 町おこし の案内PDF（events/{eventId}/infoPdfs、最大5件）。
+// Push-taro.スタンプラリー の案内PDF（events/{eventId}/infoPdfs、最大5件）。
 // ファイル本体は Firebase Storage に置き、ここではメタデータ（タイトル・URL・
 // Storageパス）だけを管理する。アップロード自体は管理画面からクライアントSDKで
 // 行い（本家の画像アップロードと同じ方式）、登録時に件数上限をサーバーで守る。

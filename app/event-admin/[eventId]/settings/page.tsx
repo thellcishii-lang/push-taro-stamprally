@@ -1,7 +1,7 @@
 'use client';
 
 // app/event-admin/[eventId]/settings/page.tsx
-// Push-taro 町おこし 主催者向けの設定画面。
+// Push-taro.スタンプラリー 主催者向けの設定画面。
 // 来場者登録用QRコードの表示・ダウンロード、案内PDFの管理
 // （アップロード／一覧／削除、最大5件）と、主催者リンクの管理
 // （タイトル＋URL、最大3件）を行う。

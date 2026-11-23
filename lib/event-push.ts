@@ -1,5 +1,5 @@
 // lib/event-push.ts
-// Push-taro 町おこし のプッシュ配信と課金集計（events/{eventId}/campaigns）。
+// Push-taro.スタンプラリー のプッシュ配信と課金集計（events/{eventId}/campaigns）。
 //
 // - 配信は購読者の言語別 FCM トピック `event_{eventId}_users_{locale}` 宛て。
 //   登録時に来場者を自分の言語のトピックへ購読させ、送信時は言語ごとに

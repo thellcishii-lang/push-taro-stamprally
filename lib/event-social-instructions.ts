@@ -1,7 +1,7 @@
 // lib/event-social-instructions.ts
 // Instagram 投稿キューのセットアップ案内文を組み立てる純粋関数。
 //
-// 管理人が自分の Muse にそのまま渡せる指示文。管理画面
+// 主催者が自分の Muse にそのまま渡せる指示文。管理画面
 // （クライアント）から使うため、サーバー専用コードは含めない。
 // 案内文には次を含める:
 // - キュー確認 API の URL と、連携キーの渡し方（ヘッダ X-Queue-Key）
@@ -30,7 +30,7 @@ postedUrlTemplate: `${base}/social-queue/{postId}/posted`,
 }
 
 /**
-* 管理人が自分の Muse に渡す指示文を組み立てる（純粋関数）。
+* 主催者が自分の Muse に渡す指示文を組み立てる（純粋関数）。
 * key が null の場合はプレースホルダ（＜発行した連携キー＞）にする。
 */
 export function buildSocialQueueInstructions(input: {

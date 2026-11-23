@@ -21,7 +21,7 @@ export type GeocodeFn = (address: string) => Promise<GeoPoint | null>;
 const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
 // Nominatim の利用ポリシーで必須とされる、アプリ識別用の User-Agent。
 const NOMINATIM_USER_AGENT =
-  'PushTaroMachiokoshi/1.0 (shop map geocoding; contact: info@push-taro.com)';
+  'PushTaroStamprally/1.0 (shop map geocoding; contact: info@push-taro.com)';
 const GEOCODE_TIMEOUT_MS = 5000;
 
 function isValidPoint(lat: number, lng: number): boolean {

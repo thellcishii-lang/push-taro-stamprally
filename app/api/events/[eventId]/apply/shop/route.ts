@@ -1,6 +1,6 @@
 // app/api/events/[eventId]/apply/shop/route.ts
 // 参加店の自己登録の開始（公開・認証なし）。
-// 店名＋メールを受け取り、料金が有料なら管理人自身の Stripe の
+// 店名＋メールを受け取り、料金が有料なら主催者自身の Stripe の
 // Checkout URL を返し、無料ならその場で登録を完了する。
 // 支払いの確認と参加店レコードの作成は lib/event-apply.ts が担う
 // （Webhook と戻り照会の両経路で実体化される）。

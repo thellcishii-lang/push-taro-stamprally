@@ -57,7 +57,7 @@ describe('POST /api/events/[eventId]/stamps', () => {
     expect(mocks.grantStamp).not.toHaveBeenCalled();
   });
 
-  it('管理人（ガードの 403）は押せない', async () => {
+  it('主催者（ガードの 403）は押せない', async () => {
     mocks.requireEventExhibitor.mockResolvedValue({
       error: NextResponse.json(
         { error: 'この操作は参加店だけが行えます' },

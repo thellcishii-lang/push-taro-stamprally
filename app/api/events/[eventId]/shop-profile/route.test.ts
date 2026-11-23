@@ -208,7 +208,7 @@ describe('PUT /api/events/[eventId]/shop-profile', () => {
     expect(response.status).toBe(404);
   });
 
-  it('管理人（ガードの 403）は保存できない', async () => {
+  it('主催者（ガードの 403）は保存できない', async () => {
     mocks.requireEventExhibitor.mockResolvedValue({
       error: NextResponse.json(
         { error: 'この操作は参加店だけが行えます' },

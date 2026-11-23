@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/ads/[exhibitorId]/approve/route.ts
-// 広告の承認（管理人だけ）。申請中（pending）の版が掲載版（live）に
+// 広告の承認（主催者だけ）。申請中（pending）の版が掲載版（live）に
 // 繰り上がる。申請中が無ければ 409。
 import { NextResponse } from 'next/server';
 import { requireEventOwner } from '@/lib/event-auth';

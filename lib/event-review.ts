@@ -1,14 +1,14 @@
 // lib/event-review.ts
-// Push-taro 町おこし のレビュー（書き込み）基盤（events/{eventId} 配下）。
+// Push-taro.スタンプラリー のレビュー（書き込み）基盤（events/{eventId} 配下）。
 //
 // - reviews/{memberId}_{exhibitorId}: レビュー本体。ドキュメントIDの
 //   一意性で「1人1店1件まで」を構造的に担保し、書き直しは同じ
-//   ドキュメントの更新（createdAt は保持、visible は管理人の設定を保持）。
+//   ドキュメントの更新（createdAt は保持、visible は主催者の設定を保持）。
 // - 書けるのは、その店のスタンプをもらった客だけ（資格判定は
 //   lib/event-stamp.ts の hasStampForShop）。投稿は即時公開され、
-//   不適切なものだけ管理人が非表示にできる（店側は触れない）。
+//   不適切なものだけ主催者が非表示にできる（店側は触れない）。
 // - 項目別評価の項目（内容と数）はプロジェクト設定
-//   （EventConfig.reviewCategories）で管理人が変えられる。レビューには
+//   （EventConfig.reviewCategories）で主催者が変えられる。レビューには
 //   投稿時点の項目名を categoryScores（{label, stars} の配列）として
 //   スナップショット保存し、表示は常にその項目名を使う（設定を後から
 //   変えても過去のレビューの表示は変わらない。スタンプ特典の
@@ -524,7 +524,7 @@ export type UpsertReviewResult =
  * 項目別評価は、プロジェクトの現在の項目（reviewCategories）と
  * 項目名・並びが一致するものだけを受け付け、項目名つきでそのまま
  * 保存する（これが表示用のスナップショットになる）。
- * 編集しても createdAt は保持し、管理人が付けた非表示（visible=false）も
+ * 編集しても createdAt は保持し、主催者が付けた非表示（visible=false）も
  * 保持する（書き直しで非表示を解除できないように）。
  */
 export async function upsertReview(
@@ -690,7 +690,7 @@ export async function listReviewsForAdmin(
   }));
 }
 
-// ─── 表示切り替え（管理人だけ） ───
+// ─── 表示切り替え（主催者だけ） ───
 
 export type SetReviewVisibilityResult =
   | { ok: true; reviewId: string; visible: boolean }

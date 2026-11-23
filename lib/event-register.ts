@@ -1,5 +1,5 @@
 // lib/event-register.ts
-// Push-taro 町おこし の来場者登録（events/{eventId} 配下への配置）。
+// Push-taro.スタンプラリー の来場者登録（events/{eventId} 配下への配置）。
 //
 // - 本人確認の方式は契約のデータ上のスイッチ（organizers.smsAuthEnabled）で
 //   切り替わる。画面にトグルは無い。

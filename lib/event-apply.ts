@@ -1,18 +1,18 @@
 // lib/event-apply.ts
-// Push-taro 町おこし の自己申込（公開の申込ページ）。
+// Push-taro.スタンプラリー の自己申込（公開の申込ページ）。
 //
 // 2026-11-17 Ishii の仕様: 申込の形は Push-taro 自身の申込と同じ
 // （申し込む → 払う → ログイン情報がメールで届く）。入口は2つ:
 // - 参加店登録ページ: 店が店名＋メール（店舗課金オプションが有効な
 //   契約では住所も必須）で申し込み、プロジェクトの月額
-//   （shopMonthlyPrice）を管理人自身の Stripe で払う。支払いの確認が
+//   （shopMonthlyPrice）を主催者自身の Stripe で払う。支払いの確認が
 //   取れてから参加店レコードが作られ、アクセスコードの招待メールが
 //   届く。店はログインしてプロフィールを整えると掲載される。
 // - 広告申込ページ: 外部の事業者が申し込み、プロジェクトの広告料金
 //   （adsPrice）を払う。確認が取れてから協賛（advertiser）レコードが
 //   作られ、広告編集画面へのログイン情報がメールで届く。あとは既存の
-//   広告の仕組み（申請 → 管理人の承認 → 掲載）に乗る。
-// 管理人発行（管理画面からの登録）は従来どおり残り、両入口が併存する。
+//   広告の仕組み（申請 → 主催者の承認 → 掲載）に乗る。
+// 主催者発行（管理画面からの登録）は従来どおり残り、両入口が併存する。
 // 自己申込のレコードには source: 'self' が付く。
 //
 // 支払い確認前の申込は「申込レコード」（events/{eventId}/applications）
@@ -182,7 +182,7 @@ export type ExistingDecision =
  * 参加店の自己登録で、同じメールの既存レコードをどう扱うか。
  * - 閉店済みレコードは存在しないものとして扱う。
  * - 掲載停止から3ヶ月を過ぎていれば閉店にして新規登録を通す。
- * - 掲載停止中（3ヶ月未満）は断る（店は管理人へ連絡して復旧する）。
+ * - 掲載停止中（3ヶ月未満）は断る（店は主催者へ連絡して復旧する）。
  * - それ以外（通常の登録済み）も重複として断る。
  */
 export function decideExistingExhibitor(
@@ -547,7 +547,7 @@ export type MaterializeResult =
  * - 既に完了していれば何もしない（alreadyCompleted）。
  * - 別の経路が処理中（claim が新しい）なら、その経路に任せる。
  * - 実体化の途中で落ちた場合は、予定 ID のレコードがあれば作り直さず
- *   完了だけを記録する（メールは管理人の再発行で補える）。
+ *   完了だけを記録する（メールは主催者の再発行で補える）。
  */
 export async function materializeApplication(
   db: Firestore,
@@ -727,7 +727,7 @@ export type StartApplicationResult =
  * - 'unpaid': まだ支払われていない（新しいセッションを発行してよい）
  * - 'unknown': 照会できなかった（安全側で新しいセッションを発行する）
  * - 'conflict': 支払い済みだが実体化で衝突した（二重に課金しないよう、
- *   新しいセッションは発行せず管理人の対応に回す）
+ *   新しいセッションは発行せず主催者の対応に回す）
  */
 async function resumeIfAlreadyPaid(
   db: Firestore,
@@ -763,7 +763,7 @@ async function resumeIfAlreadyPaid(
 }
 
 const APPLY_CONFLICT_ERROR =
-  'お支払いは確認できましたが、登録の完了に問題が発生しました。プロジェクトの管理人へお問い合わせください';
+  'お支払いは確認できましたが、登録の完了に問題が発生しました。プロジェクトの主催者へお問い合わせください';
 
 // ─── 参加店の自己登録 ───
 
@@ -771,7 +771,7 @@ const SHOP_NOT_AVAILABLE_ERROR = '現在参加店の登録は受け付けてい�
 
 /**
  * 参加店の自己登録を始める。
- * - 前提: プロジェクトに月額が設定され、管理人の店舗課金オプションと
+ * - 前提: プロジェクトに月額が設定され、主催者の店舗課金オプションと
  *   Stripe が使える状態であること（charges/ads と同じ可用性解決）。
  * - 同じメールの既存レコードは decideExistingExhibitor で捌く
  *   （重複拒否／掲載停止中は拒否／3ヶ月経過は閉店にして通す）。
@@ -801,7 +801,7 @@ export async function startShopApplication(
   }
   const organizer = availability.organizer;
 
-  // 住所: 店舗課金オプションが有効な契約では必須（管理人発行と共通の
+  // 住所: 店舗課金オプションが有効な契約では必須（主催者発行と共通の
   // parseRegistrationAddress で検証する）。検証した住所は申込レコードに
   // 保持し、実体化時に参加店ドキュメントのトップレベル address へ渡す。
   const addressResult = parseRegistrationAddress(
@@ -821,7 +821,7 @@ export async function startShopApplication(
       status: 400,
       error:
         decision.reason === 'delisted'
-          ? 'このメールアドレスは現在ご登録いただけません。プロジェクトの管理人へお問い合わせください'
+          ? 'このメールアドレスは現在ご登録いただけません。プロジェクトの主催者へお問い合わせください'
           : 'そのメールアドレスはこのプロジェクトで既に登録されています',
     };
   }
@@ -928,7 +928,7 @@ async function issueShopCheckout(
           currency: 'jpy',
           unit_amount: app.amount,
           recurring: { interval: 'month' },
-          product_data: { name: 'Push-taro.町おこし 参加店 月額料金' },
+          product_data: { name: 'Push-taro.スタンプラリー 参加店 月額料金' },
         },
       },
     ],
@@ -999,7 +999,7 @@ const AD_NOT_AVAILABLE_ERROR = '現在広告のお申し込みは受け付けて
 
 /**
  * 広告の自己申込を始める。
- * - 前提: 広告オプション（管理人の契約）が有効で、プロジェクトの
+ * - 前提: 広告オプション（主催者の契約）が有効で、プロジェクトの
  *   広告が有効（adsEnabled）で、料金が設定されていること。
  *   有料の間は課金レール（店舗課金オプション＋Stripe）も必要。
  *   料金 0 は支払いなしでそのまま実体化する（既存の広告の無料運用と
@@ -1155,7 +1155,7 @@ async function issueAdCheckout(
           currency: 'jpy',
           unit_amount: app.amount,
           recurring: { interval: 'month' },
-          product_data: { name: 'Push-taro.町おこし 特設サイト 広告掲載' },
+          product_data: { name: 'Push-taro.スタンプラリー 特設サイト 広告掲載' },
         },
       },
     ],
@@ -1233,7 +1233,7 @@ export type VerifyApplicationResult =
   | { ok: false; status: number; error: string };
 
 /**
- * 申込者が Checkout から戻ったときの検証: 管理人の Stripe でセッションを
+ * 申込者が Checkout から戻ったときの検証: 主催者の Stripe でセッションを
  * 照会し、支払い済みで、metadata の所属（プロジェクト・申込）が
  * 対象の申込と一致することを確認してから実体化する。
  * セッション ID 自体が申込者だけに渡る控えになる（店舗の単発課金の

@@ -152,7 +152,7 @@ describe('POST /api/events/[eventId]/reviews', () => {
   });
 });
 
-describe('GET /api/events/[eventId]/reviews（管理人用一覧）', () => {
+describe('GET /api/events/[eventId]/reviews（主催者用一覧）', () => {
   it('所有者には非表示を含む全件を返す', async () => {
     mocks.requireEventOwner.mockResolvedValue({
       uid: 'owner-1',

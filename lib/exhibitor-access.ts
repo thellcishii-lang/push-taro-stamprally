@@ -2,8 +2,8 @@
 // 参加店ログインの「プロジェクト専用アクセスコード」基盤。
 //
 // 決定（2026-11-10 Ishii、仕様メモ「参加店ログインの作り直し」）:
-// 参加店は Firebase Auth に入れない。Auth のアカウントは契約者（管理人）
-// だけ。参加店の頭の中は「プロジェクトごと・管理人ごと」なので、ログイン資格も
+// 参加店は Firebase Auth に入れない。Auth のアカウントは契約者（主催者）
+// だけ。参加店の頭の中は「プロジェクトごと・主催者ごと」なので、ログイン資格も
 // プロジェクトごとに独立させる:
 // - 参加店は events/{eventId}/exhibitors/{id} ドキュメントにメールアドレスと
 // アクセスコード（ハッシュ化して accessCode フィールドに保存）を持つ。
@@ -265,7 +265,7 @@ lang: Locale;
 /** 登録住所（管理用）。検証済みの文字列。未収集なら未指定 */
 address?: string;
 kind: ExhibitorKind;
-/** 登録の入口。未指定は管理人発行（'admin'） */
+/** 登録の入口。未指定は主催者発行（'admin'） */
 source?: 'admin' | 'self';
 /** ドキュメントIDを先に決める場合（自己申込の事前採番） */
 id?: string;
@@ -350,7 +350,7 @@ await exhibitorsRef(eventId).doc(exhibitorId).update({ email});
 
 // ─── アプリの origin と消込ページ URL ───
 
-// origin の実体は共有 lib（lib/app-origin）に切り出した。管理人コンソール
+// origin の実体は共有 lib（lib/app-origin）に切り出した。主催者コンソール
 // （クライアント側）でも来場者ページ URL を組み立てるため、サーバー専用
 // コードを含まない場所に置く。既存の import 互換のため、ここからも公開する。
 export { APP_ORIGIN, resolveAppOrigin };
@@ -392,17 +392,17 @@ eventName?: string | null;
 code: string;
 loginUrl: string;
 reissued: boolean;
-/** 自己申込（申込ページから自分で登録）かどうか。未指定は管理人発行 */
+/** 自己申込（申込ページから自分で登録）かどうか。未指定は主催者発行 */
 selfServed?: boolean;
 }): string {
 const eventPart = input.eventName
 ? `プロジェクト「${escapeHtml(input.eventName)}」`
-: 'Push-taro 町おこし のプロジェクト';
+: 'Push-taro.スタンプラリー のプロジェクト';
 const lead = input.reissued
 ? `<p>${eventPart}の消込ログイン用パスワードを再発行しました。今までのパスワードは使えなくなります。</p>`
 : input.selfServed
 ? `<p>${eventPart}へのお申し込み（ご登録）が完了しました。</p>`
-: `<p>Push-taro 町おこし の管理人により、${eventPart}の参加店として登録されました。</p>`;
+: `<p>Push-taro.スタンプラリー の主催者により、${eventPart}の参加店として登録されました。</p>`;
 return `
 <p>${escapeHtml(input.exhibitorName)} 様</p>
 ${lead}
@@ -482,7 +482,7 @@ mailSent: boolean;
 * 参加店を登録し、プロジェクト専用パスワードを発行してメールで送る。
 * - メール形式が不正なら 400。同一プロジェクト内で同じメールが既にあれば 400。
 * - コード自体は戻り値に含めない（メールでのみ参加店に渡る）。
-* - メール送信の失敗は登録の失敗にしない（管理人は再発行で送り直せる）。
+* - メール送信の失敗は登録の失敗にしない（主催者は再発行で送り直せる）。
 */
 export async function registerExhibitor(
 input: {
@@ -495,7 +495,7 @@ eventName?: string | null;
 address?: string;
 /** アカウントの種類。未指定は参加店（'shop'）。協賛は 'advertiser' */
 kind?: ExhibitorKind;
-/** 登録の入口。未指定は管理人発行（'admin'）。自己申込は 'self' */
+/** 登録の入口。未指定は主催者発行（'admin'）。自己申込は 'self' */
 source?: 'admin' | 'self';
 /**
  * ドキュメントIDを先に決める場合に指定する。自己申込では支払い確認前に
@@ -601,7 +601,7 @@ mailSent: boolean;
 }
 
 /**
-* パスワード再発行（管理人操作）。新コードに差し替え、登録メールへ送る。
+* パスワード再発行（主催者操作）。新コードに差し替え、登録メールへ送る。
 * 旧コードはハッシュを上書きした時点で失効する。
 * メール未登録の旧参加店（Auth 時代のドキュメント）は、email を渡せば
 * その場で設定して発行できる。

@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/social-queue/route.ts
-// Muse 用のキュー確認 API。管理人自身の Muse が朝・昼・夜に叩き、
+// Muse 用のキュー確認 API。主催者自身の Muse が朝・昼・夜に叩き、
 // 投稿待ち（queued）の投稿を古い順に受け取る。
 // 認証は連携キー（ヘッダ X-Queue-Key）。キーが無い・失効・不一致は 401。
 // レスポンスの各要素が、そのまま Instagram 投稿に使える形

@@ -1,7 +1,7 @@
 // app/api/events/[eventId]/end/route.ts
 // 主催者向けプロジェクト終了 API: 開催中（live）のプロジェクトを
 // 終了（ended）に遷移させる。
-// 町おこしでは終了してもデータ（スタンプ・レビュー等）は残す。
+// スタンプラリーでは終了してもデータ（スタンプ・レビュー等）は残す。
 // EVENT の終了処理のようなデータ消去は一切しない
 // （削除したい場合は終了後に DELETE で行う）。
 import { NextResponse } from 'next/server';

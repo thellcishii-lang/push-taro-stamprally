@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/reviews/route.ts
-// レビューの投稿（来場者）と、全件一覧（管理人）。
+// レビューの投稿（来場者）と、全件一覧（主催者）。
 // POST: 認証方式に応じたトークンから本人を特定し（lib/event-member-auth.ts）、
 // その店のスタンプをもらった客だけが書ける（資格判定は
 // lib/event-review.ts の upsertReview）。

@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/ranking/recompute/route.test.ts
-// 手動再計算 API: 管理人ガードを通し、対象週（既定は先週、weekStart
+// 手動再計算 API: 主催者ガードを通し、対象週（既定は先週、weekStart
 // 指定時はその週）を lib の計算に渡すことを検証する。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';

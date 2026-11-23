@@ -1,7 +1,7 @@
 'use client';
 
 // app/event-admin/page.tsx
-// Push-taro 町おこし の主催者向けプロジェクト設定画面。
+// Push-taro.スタンプラリー の主催者向けプロジェクト設定画面。
 // プロジェクトの一覧・作成・編集（開催期間／リセット方式／リセット時刻／上限／バックアップ保持日数／状態）。
 // 作成は「下書きで作成」と「登録（開催中として作成）」の2ボタンで状態を明示する。
 // 一覧のカードのアクションは「ダッシュボードを開く」「プロジェクト編集」と
@@ -12,7 +12,7 @@
 // 公開（開催中にする）は編集フォームの状態変更から、削除は編集フォームから
 // できる（下書き・終了のみ。削除は DELETE /api/events/[eventId]）。
 // 契約まわりの導線として、一覧の上にプラン変更を置く
-// （本家の町おこし専用契約ページへのリンク）。
+// （本家のスタンプラリー専用契約ページへのリンク）。
 // 将来の管理画面3分割（プッシュ＋消込／予約／クーポン管理）の土台として、
 // まずはプロジェクト設定に絞った単独画面にしている。
 // 同時に仕込めるプロジェクトは3つまで（下書き＋開催中。終了は数えない）で、
@@ -96,8 +96,8 @@ function toForm(event: EventConfig): EventForm {
 
 const VIOLET = '#8B5E34';
 
-// 契約まわりの手続きは本家の町おこし専用契約ページ（push-taro.com/machiokoshi-account）。
-const HONKE_SHOP_URL = 'https://push-taro.com/machiokoshi-account';
+// 契約まわりの手続きは本家のスタンプラリー専用契約ページ（push-taro.com/stamprally-account）。
+const HONKE_SHOP_URL = 'https://push-taro.com/stamprally-account';
 
 const containerStyle: React.CSSProperties = {
   padding: '20px 16px 48px',

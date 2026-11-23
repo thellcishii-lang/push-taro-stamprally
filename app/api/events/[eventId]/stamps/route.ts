@@ -1,7 +1,7 @@
 // app/api/events/[eventId]/stamps/route.ts
 // スタンプの付与と、当日に自店が押したスタンプの一覧。
 // 実行できるのは参加店セッション（プロジェクト専用コードのカスタム
-// トークン）だけ。管理人（プロジェクト所有者）はスタンプを押せない
+// トークン）だけ。主催者（プロジェクト所有者）はスタンプを押せない
 // （押すのは店だけ、という製品ルール。ガードは requireEventExhibitor）。
 import { NextResponse } from 'next/server';
 import { requireEventExhibitor } from '@/lib/event-auth';

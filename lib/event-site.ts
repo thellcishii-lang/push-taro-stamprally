@@ -26,7 +26,7 @@ export interface SiteSettings {
   siteDescription: string;
   /**
    * ご当地グルメの定義（例: 飯能カレーと呼べる条件・素材・スタイル）。
-   * 管理人が書き、特設サイトに表示する。未設定は空文字。改行を含む。
+   * 主催者が書き、特設サイトに表示する。未設定は空文字。改行を含む。
    */
   gourmetDefinition: string;
   heroImageUrl: string | null;

@@ -1,7 +1,7 @@
 // app/api/events/[eventId]/shop-charges/verify/route.ts
 // 参加店向け: 単発課金（クーポン発行・プッシュ配信申請）の支払い照会。
 // 店が Stripe Checkout から店舗ページに戻ったときに叩く。サーバーが
-// 管理人の Stripe でセッションを照会し、支払い済みで所属（プロジェ
+// 主催者の Stripe でセッションを照会し、支払い済みで所属（プロジェ
 // クト・参加店）が自分と一致することを確認してから反映する。
 // Webhook でも同じ反映が走るため、ここが失敗しても支払いは失われない。
 import { NextResponse } from 'next/server';

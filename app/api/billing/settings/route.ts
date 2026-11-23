@@ -1,6 +1,6 @@
 // app/api/billing/settings/route.ts
-// 店舗課金オプションの Stripe 設定（管理人単位）。
-// 管理人自身の Stripe の APIキーと Webhook シークレットを保存する。
+// 店舗課金オプションの Stripe 設定（主催者単位）。
+// 主催者自身の Stripe の APIキーと Webhook シークレットを保存する。
 // キーの値はレスポンスに絶対に含めない: GET は「保存済みかどうか」と
 // Webhook URL の案内だけを返し、PUT の応答も状態だけを返す。
 // 入力欄は常に空で出す前提（画面側）。

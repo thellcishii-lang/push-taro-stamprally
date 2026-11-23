@@ -4,3 +4,9 @@ node_modules/
 !.env.example
 npm-debug.log*
 tsconfig.tsbuildinfo
+
+# サービスアカウント鍵（絶対にコミットしない）
+sa.json
+*service-account*.json
+serviceAccountKey.json
+*-adminsdk-*.json

@@ -1,17 +1,17 @@
 // lib/event-push-request.ts
-// Push-taro 町おこし の「参加店からのプッシュ配信申請」。
+// Push-taro.スタンプラリー の「参加店からのプッシュ配信申請」。
 //
 // 仕組み:
 // - 参加店が店舗ページで配信のタイトル・本文を作って申請する。
-//   文面は作成時に全言語へ自動翻訳して持つ（管理人の配信と同じ作法）。
+//   文面は作成時に全言語へ自動翻訳して持つ（主催者の配信と同じ作法）。
 // - 手数料（プロジェクト設定 pushPrice、1回あたり）:
-//   - 無料（0円・未設定）: 申請はそのまま管理人の承認待ちになる。
-//   - 有料: 先に管理人自身の Stripe で支払い（lib/event-charges.ts）、
-//     支払いが確認できてから承認待ちになる。未払いの申請は管理人の
+//   - 無料（0円・未設定）: 申請はそのまま主催者の承認待ちになる。
+//   - 有料: 先に主催者自身の Stripe で支払い（lib/event-charges.ts）、
+//     支払いが確認できてから承認待ちになる。未払いの申請は主催者の
 //     承認キューに出ない。
-// - 管理人が承認すると、その場で通常の配信（campaigns）として実行
+// - 主催者が承認すると、その場で通常の配信（campaigns）として実行
 //   される。却下すると申請は破棄され、状態だけが店に残る。
-// - 管理人自身の配信（campaigns API）は従来どおりで、この申請とは別。
+// - 主催者自身の配信（campaigns API）は従来どおりで、この申請とは別。
 import type { Firestore } from 'firebase-admin/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
 import { parseLocalizedTexts, type Locale } from './i18n';
@@ -28,10 +28,10 @@ export const EVENT_PUSH_REQUESTS_COLLECTION = 'pushRequests';
 
 /**
  * 申請の状態。
- * - unpaid: 有料で支払い待ち（管理人の承認キューには出ない）
- * - pending: 管理人の承認待ち
+ * - unpaid: 有料で支払い待ち（主催者の承認キューには出ない）
+ * - pending: 主催者の承認待ち
  * - sent: 承認され、配信済み
- * - rejected: 管理人に却下された
+ * - rejected: 主催者に却下された
  * - failed: 承認されたが配信に失敗した
  */
 export type ShopPushRequestStatus =
@@ -107,7 +107,7 @@ export function rejectedPushRequestStatus(
   return current === 'pending' ? 'rejected' : null;
 }
 
-/** 管理人の承認キューに出すかどうか（純粋関数）。支払い済み・無料の承認待ちだけ。 */
+/** 主催者の承認キューに出すかどうか（純粋関数）。支払い済み・無料の承認待ちだけ。 */
 export function isPushRequestApprovable(status: ShopPushRequestStatus): boolean {
   return status === 'pending';
 }
@@ -171,7 +171,7 @@ export interface CreatePushRequestInput {
 }
 
 /**
- * 申請を作る。文面は作成時に翻訳を揃える（管理人の配信と同じ作法）。
+ * 申請を作る。文面は作成時に翻訳を揃える（主催者の配信と同じ作法）。
  * 状態は手数料で決まる（有料=支払い待ち／無料=承認待ち）。
  */
 export async function createPushRequest(
@@ -288,7 +288,7 @@ export async function markPushRequestPaid(
   return { ...current, status: next };
 }
 
-/** 管理人の却下。承認待ちでなければ 409 相当のエラーを返す。 */
+/** 主催者の却下。承認待ちでなければ 409 相当のエラーを返す。 */
 export type RejectPushRequestResult =
   | { ok: true; request: ShopPushRequest }
   | { ok: false; status: number; error: string };
@@ -318,7 +318,7 @@ export type ApprovePushRequestResult =
   | { ok: false; status: number; error: string };
 
 /**
- * 管理人の承認: 申請を通常の配信（campaigns）として作り、その場で
+ * 主催者の承認: 申請を通常の配信（campaigns）として作り、その場で
  * 実行する。配信できたら申請は 'sent'、失敗したら 'failed'（理由付き）
  * になる。どちらも申請としては「決定済み」として扱う。
  * 二重送信防止は campaigns 側の executeCampaign の確保に任せる。

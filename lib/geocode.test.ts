@@ -31,7 +31,7 @@ describe('geocodeAddress', () => {
     expect(url).toContain('https://nominatim.openstreetmap.org/search');
     expect(url).toContain('format=json');
     expect(url).toContain(encodeURIComponent('埼玉県飯能市 本町1-1'));
-    expect(init.headers['User-Agent']).toContain('PushTaroMachiokoshi');
+    expect(init.headers['User-Agent']).toContain('PushTaroStamprally');
   });
 
   it('該当なし（空配列）は null', async () => {

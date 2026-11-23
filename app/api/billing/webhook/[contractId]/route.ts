@@ -5,7 +5,7 @@
 // 申込）で共用し、metadata.kind = 'top-placement' / 'ad-placement' /
 // 'coupon-issue' / 'push-send' / 'shop-registration' /
 // 'ad-application' のイベントはそれぞれの処理へ振り分ける。
-// パスで管理人（契約）を特定し、その管理人自身の Webhook シークレットで
+// パスで主催者（契約）を特定し、その主催者自身の Webhook シークレットで
 // 署名を検証する。検証は生ボディに対して行う（JSON に変換してからでは
 // 署名が一致しない）。署名検証に失敗したら 400。
 // 処理結果はローカル記録（Firestore）に反映され、それが課金状態の正。

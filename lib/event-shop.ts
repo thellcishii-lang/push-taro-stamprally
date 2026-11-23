@@ -1,5 +1,5 @@
 // lib/event-shop.ts
-// Push-taro 町おこし の店舗プロフィール基盤（events/{eventId} 配下）。
+// Push-taro.スタンプラリー の店舗プロフィール基盤（events/{eventId} 配下）。
 //
 // - プロフィールは参加店ドキュメント（exhibitors/{exhibitorId}）の
 //   `profile` フィールドに持つ。データは1つ: 店が店舗専用ページで

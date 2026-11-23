@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/social-posts/photo/route.ts
-// 投稿写真のアップロード（管理人）。プロジェクト所有者を確認のうえ、
+// 投稿写真のアップロード（主催者）。プロジェクト所有者を確認のうえ、
 // Admin SDK で Storage に保存し、表示用 URL を返す。
 // 保存先: events/{eventId}/social-photos/{uuid}.{ext}
 // 検証（jpg/png/webp、1枚5MBまで）はレビュー写真と同じ純粋関数。

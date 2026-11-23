@@ -1,5 +1,5 @@
 // lib/variant-identity.ts
-// このバリアント（町おこし）の同一性: Firebase プロジェクト ID と
+// このバリアント（スタンプラリー）の同一性: Firebase プロジェクト ID と
 // App Hosting バックエンド ID の唯一の定義場所。
 //
 // 背景: バリアントは互いのフォークで作るため、コピー元の公開 URL や
@@ -11,13 +11,13 @@
 // lib/variant-identity.test.ts が常時検査する。
 
 /** このバリアントの Firebase プロジェクト ID。 */
-export const VARIANT_PROJECT_ID = 'push-taro-machiokoshi';
+export const VARIANT_PROJECT_ID = 'push-taro-stamprally';
 
 /**
  * App Hosting のバックエンド ID。プロジェクト ID とは別物で、
  * 公開 URL は `<backend>--<project>.asia-east1.hosted.app` の形になる。
  */
-export const VARIANT_BACKEND_ID = 'machiokoshi';
+export const VARIANT_BACKEND_ID = 'push-taro-stamprally';
 
 /** 本番の App Hosting origin（環境変数で上書きされる前の既定値）。 */
 export const APP_HOSTING_ORIGIN = `https://${VARIANT_BACKEND_ID}--${VARIANT_PROJECT_ID}.asia-east1.hosted.app`;

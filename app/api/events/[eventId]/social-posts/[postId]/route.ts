@@ -1,5 +1,5 @@
 // app/api/events/[eventId]/social-posts/[postId]/route.ts
-// 投稿キューの投稿削除（管理人）。投稿待ちのものだけ削除できる。
+// 投稿キューの投稿削除（主催者）。投稿待ちのものだけ削除できる。
 // 投稿済みのものは Instagram 側に実物があるため履歴として残す。
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';

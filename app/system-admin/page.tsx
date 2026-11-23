@@ -1,7 +1,7 @@
 'use client';
 
 // app/system-admin/page.tsx
-// Push-taro 町おこし 運営コンソール（運営専用。admin 権限のあるアカウントのみ）。
+// Push-taro.スタンプラリー 運営コンソール（運営専用。admin 権限のあるアカウントのみ）。
 // 契約者一覧と、本家連携APIキーの管理を行う。運用監視は次段で追加する。
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -150,7 +150,7 @@ export default function SystemAdminPage() {
   if (!user) {
     return (
       <main style={{ maxWidth: 420, margin: '40px auto', padding: 24 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 800 }}>Push-taro 町おこし 運営コンソール ログイン</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 800 }}>Push-taro.スタンプラリー 運営コンソール ログイン</h1>
         <label style={labelStyle}>
           メールアドレス
           <input style={inputStyle} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -170,7 +170,7 @@ export default function SystemAdminPage() {
   return (
     <main style={{ maxWidth: 880, margin: '0 auto', padding: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 800 }}>Push-taro 町おこし 運営コンソール</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 800 }}>Push-taro.スタンプラリー 運営コンソール</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <a href="/system-admin/monitoring" style={{ fontSize: 13 }}>
             運用監視 →

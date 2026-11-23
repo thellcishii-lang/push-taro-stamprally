@@ -153,7 +153,7 @@ export function AdminShell({
                 lineHeight: 1.12,
               }}
             >
-              町おこしプロジェクト
+              スタンプラリープロジェクト
             </div>
             <div
               style={{

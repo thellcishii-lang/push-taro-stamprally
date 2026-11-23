@@ -1,7 +1,7 @@
 // app/api/events/[eventId]/social-posts/route.ts
-// Instagram 投稿キューの投稿作成と一覧（管理人）。
+// Instagram 投稿キューの投稿作成と一覧（主催者）。
 // POST: 投稿を作って「投稿待ち」に入れる。実際の Instagram 投稿は
-// 管理人自身の Muse がキュー確認 API 経由で行う（製品は投稿しない）。
+// 主催者自身の Muse がキュー確認 API 経由で行う（製品は投稿しない）。
 // GET: 管理画面用の一覧（投稿済みも含む）。
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';

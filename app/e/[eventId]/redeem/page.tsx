@@ -1,7 +1,7 @@
 'use client';
 
 // app/e/[eventId]/redeem/page.tsx
-// Push-taro 町おこし の出店者用 消込専用画面。
+// Push-taro.スタンプラリー の出店者用 消込専用画面。
 // メール+パスワード（プロジェクト専用アクセスコード）でログインし、自社の
 // クーポンだけを消し込む。ログインはサーバー照合（exhibitor-login API）が
 // 発行するカスタムトークンでセッション化する。出店者は Firebase Auth の

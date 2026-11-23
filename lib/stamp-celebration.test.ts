@@ -29,7 +29,7 @@ const noneCelebrated = () => false;
 
 describe('celebrationStorageKey', () => {
   it('クーポンIDごとに一意なキーを作る', () => {
-    expect(celebrationStorageKey('fc-1')).toBe('machiokoshi-celebrated-fc-1');
+    expect(celebrationStorageKey('fc-1')).toBe('stamprally-celebrated-fc-1');
     expect(celebrationStorageKey('fc-1')).not.toBe(
       celebrationStorageKey('fc-2'),
     );

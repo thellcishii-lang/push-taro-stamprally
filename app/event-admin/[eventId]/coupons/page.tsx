@@ -1,7 +1,7 @@
 'use client';
 
 // app/event-admin/[eventId]/coupons/page.tsx
-// Push-taro 町おこし 主催者向けのクーポン管理画面（管理画面③）。
+// Push-taro.スタンプラリー 主催者向けのクーポン管理画面（管理画面③）。
 // 出店者（会社）の登録と、クーポンの登録・一覧を行う。クーポンはプロジェクト全体で上限あり。
 // 案内PDFの管理は設定画面（④）に移した（2026-11-11）。
 // 画面の固定文は4言語辞書（lib/ui-text.ts の ADMIN_TEXT）。
@@ -65,8 +65,8 @@ const VIOLET = '#8B5E34';
 const COUPON_OPTION_MAX_CAP = 500;
 /** 出店者一覧で既定表示する件数（残りはアコーディオンに畳む）。 */
 const EXHIBITOR_PREVIEW_COUNT = 2;
-/** クーポンオプションの購入先（本家の町おこし用決済ページ）。 */
-const HONKE_COUPON_OPTION_URL = 'https://push-taro.com/machiokoshi-option';
+/** クーポンオプションの購入先（本家のスタンプラリー用決済ページ）。 */
+const HONKE_COUPON_OPTION_URL = 'https://push-taro.com/stamprally-option';
 
 const containerStyle: React.CSSProperties = {
   padding: '20px 16px 48px',

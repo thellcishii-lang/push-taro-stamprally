@@ -1,11 +1,11 @@
 // lib/event-placement.ts
-// Push-taro 町おこし のトップ掲載課金（特設サイトの先頭5枠）。
+// Push-taro.スタンプラリー のトップ掲載課金（特設サイトの先頭5枠）。
 //
 // 仕組み:
 // - 特設サイト（本家）のプロジェクトトップに表示される参加店は5件だけ。
 //   参加店は月額（プロジェクトの topPlacementPrice）を払うと、その5枠に
 //   優先表示される（表示側の選定は本家が行う。ここは課金の正を持つ）。
-// - 決済レールは店舗課金オプションと共用: 「管理人自身の Stripe」
+// - 決済レールは店舗課金オプションと共用: 「主催者自身の Stripe」
 //   （lib/event-billing.ts の設定・Webhook 受信口）を使い、Checkout の
 //   metadata.kind = 'top-placement' で店舗課金と区別する。
 // - 掲載状態は参加店ドキュメントのトップレベル項目 `topFeatured` に
@@ -422,7 +422,7 @@ export type StartTopPlacementResult =
  * 指定して Checkout セッション（subscription モード）を発行する。
  * 店舗課金との区別は metadata.kind = 'top-placement'（セッションと
  * サブスクリプションの両方に付ける）。支払い完了後の戻り先は店舗
- * ページ。料金は申込時点のプロジェクト設定で固定され、管理人が
+ * ページ。料金は申込時点のプロジェクト設定で固定され、主催者が
  * 後から料金を変えても既存契約の金額は変わらない（Stripe の仕様）。
  */
 export async function startTopPlacement(
@@ -471,7 +471,7 @@ export async function startTopPlacement(
           currency: 'jpy',
           unit_amount: input.monthlyAmount,
           recurring: { interval: 'month' },
-          product_data: { name: 'Push-taro.町おこし 特設サイト トップ掲載' },
+          product_data: { name: 'Push-taro.スタンプラリー 特設サイト トップ掲載' },
         },
       },
     ],

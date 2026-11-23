@@ -1,5 +1,5 @@
 // lib/event-ranking.ts
-// Push-taro 町おこし の週次ランキング基盤（events/{eventId} 配下）。
+// Push-taro.スタンプラリー の週次ランキング基盤（events/{eventId} 配下）。
 //
 // - 集計期間は週次（JST の月曜〜日曜）。対象は、その週に投稿された
 //   可視レビュー（visible）だけ。決め方（Ishii 決定）: 平均星で順位を
