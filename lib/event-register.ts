@@ -20,6 +20,7 @@ import { EVENT_SUBCOLLECTIONS, EventConfig, jstDateString, localeTopic } from '.
 import { isLocale, normalizeLocale, type Locale } from './i18n';
 import { getEvent } from './event-store';
 import { memberIdForDevice } from './event-coupon';
+import type { AgeBand, Gender } from './member-demographics';
 
 export function memberIdForPhone(phoneE164: string): string {
   return createHash('sha256').update(phoneE164.trim()).digest('hex');
@@ -76,7 +77,14 @@ function eventRef(eventId: string) {
 
 export async function registerEventVisitor(
   eventId: string,
-  input: { phoneE164: string; fcmToken: string; lang?: string; now?: Date },
+  input: {
+    phoneE164: string;
+    fcmToken: string;
+    lang?: string;
+    ageBand?: AgeBand;
+    gender?: Gender;
+    now?: Date;
+  },
 ): Promise<RegisterVisitorResult> {
   const event = await getEvent(eventId);
   if (!event) {
@@ -98,7 +106,14 @@ export async function registerEventVisitor(
  */
 export async function registerEventDeviceVisitor(
   eventId: string,
-  input: { deviceUid: string; fcmToken: string; lang?: string; now?: Date },
+  input: {
+    deviceUid: string;
+    fcmToken: string;
+    lang?: string;
+    ageBand?: AgeBand;
+    gender?: Gender;
+    now?: Date;
+  },
 ): Promise<RegisterVisitorResult> {
   const event = await getEvent(eventId);
   if (!event) {
@@ -123,7 +138,13 @@ async function registerMember(
   event: EventConfig,
   memberId: string,
   memberCreateFields: Record<string, unknown>,
-  input: { fcmToken: string; lang?: string; now?: Date },
+  input: {
+    fcmToken: string;
+    lang?: string;
+    ageBand?: AgeBand;
+    gender?: Gender;
+    now?: Date;
+  },
 ): Promise<RegisterVisitorResult> {
   const now = input.now ?? new Date();
   const today = jstDateString(now);
@@ -154,11 +175,22 @@ async function registerMember(
   if (!memberSnap.exists) {
     batch.set(memberRef, {
       ...memberCreateFields,
+      // 年代・性別は任意取得。送られなかった場合は null で保存し、
+      // 集計側で「未回答」として扱えるようにする。
+      ageBand: input.ageBand ?? null,
+      gender: input.gender ?? null,
       createdAt: FieldValue.serverTimestamp(),
       lastRegisteredAt: FieldValue.serverTimestamp(),
     });
   } else {
-    batch.update(memberRef, { lastRegisteredAt: FieldValue.serverTimestamp() });
+    // 再登録（トークン付け直し等）で送られなかった項目は上書きしない。
+    // 送られた場合だけ更新する。
+    const memberUpdate: Record<string, unknown> = {
+      lastRegisteredAt: FieldValue.serverTimestamp(),
+    };
+    if (input.ageBand !== undefined) memberUpdate.ageBand = input.ageBand;
+    if (input.gender !== undefined) memberUpdate.gender = input.gender;
+    batch.update(memberRef, memberUpdate);
   }
   // 言語は個人の選択を優先し、無ければイベントのデフォルト言語で登録する
   const lang = normalizeLocale(input.lang, event.defaultLocale);

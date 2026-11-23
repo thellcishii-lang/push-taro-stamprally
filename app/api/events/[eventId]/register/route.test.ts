@@ -36,19 +36,19 @@ const EVENT_ID = 'event-1';
 const PHONE = '+819012345678';
 const DEVICE_UID = 'anon-uid-xyz';
 
-function postRequest(token?: string) {
+function postRequest(token?: string, extraBody: Record<string, unknown> = {}) {
   return new Request(`http://localhost/api/events/${EVENT_ID}/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ fcmToken: 'fcm-token-1', lang: 'ja' }),
+    body: JSON.stringify({ fcmToken: 'fcm-token-1', lang: 'ja', ...extraBody }),
   });
 }
 
-function callPost(token?: string) {
-  return POST(postRequest(token), {
+function callPost(token?: string, extraBody: Record<string, unknown> = {}) {
+  return POST(postRequest(token, extraBody), {
     params: Promise.resolve({ eventId: EVENT_ID }),
   });
 }
@@ -107,6 +107,46 @@ describe('POST /api/events/[eventId]/register', () => {
     });
     expect(mocks.registerEventVisitor).not.toHaveBeenCalled();
     expect((await response.json()).memberId).toBe('device-member');
+  });
+
+  it('SMSオフ: 有効な年代・性別はそのまま登録処理へ渡す', async () => {
+    mocks.getEventSmsAuthEnabled.mockResolvedValue(false);
+    mocks.verifyIdToken.mockResolvedValue({ uid: DEVICE_UID });
+    const response = await callPost('token', { ageBand: '30s', gender: 'female' });
+    expect(response.status).toBe(201);
+    expect(mocks.registerEventDeviceVisitor).toHaveBeenCalledWith(EVENT_ID, {
+      deviceUid: DEVICE_UID,
+      fcmToken: 'fcm-token-1',
+      lang: 'ja',
+      ageBand: '30s',
+      gender: 'female',
+    });
+  });
+
+  it('SMSオン: 有効な年代・性別はそのまま登録処理へ渡す', async () => {
+    mocks.getEventSmsAuthEnabled.mockResolvedValue(true);
+    mocks.verifyIdToken.mockResolvedValue({ uid: 'u1', phone_number: PHONE });
+    const response = await callPost('token', { ageBand: '70-plus', gender: 'no-answer' });
+    expect(response.status).toBe(201);
+    expect(mocks.registerEventVisitor).toHaveBeenCalledWith(EVENT_ID, {
+      phoneE164: PHONE,
+      fcmToken: 'fcm-token-1',
+      lang: 'ja',
+      ageBand: '70-plus',
+      gender: 'no-answer',
+    });
+  });
+
+  it('不正な年代・性別は渡さない（未送信扱いに倒す）', async () => {
+    mocks.getEventSmsAuthEnabled.mockResolvedValue(false);
+    mocks.verifyIdToken.mockResolvedValue({ uid: DEVICE_UID });
+    const response = await callPost('token', { ageBand: '20代', gender: 42 });
+    expect(response.status).toBe(201);
+    expect(mocks.registerEventDeviceVisitor).toHaveBeenCalledWith(EVENT_ID, {
+      deviceUid: DEVICE_UID,
+      fcmToken: 'fcm-token-1',
+      lang: 'ja',
+    });
   });
 
   it('SMSオフ: トークンが無ければ 401（端末向け文言）', async () => {
