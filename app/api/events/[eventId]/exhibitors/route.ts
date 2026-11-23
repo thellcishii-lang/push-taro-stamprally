@@ -8,7 +8,11 @@
 // 行い、サーバー側でも同じ条件で必須を強制する。
 import { NextResponse } from 'next/server';
 import { requireEventOwner } from '@/lib/event-auth';
-import { listExhibitors, parseExhibitorKind } from '@/lib/event-coupon';
+import {
+  ensureExhibitorStampCode,
+  listExhibitors,
+  parseExhibitorKind,
+} from '@/lib/event-coupon';
 import {
   ExhibitorAccessError,
   parseRegistrationAddress,
@@ -31,10 +35,19 @@ export async function GET(
   const { eventId } = await params;
   const guard = await requireEventOwner(request, eventId);
   if ('error' in guard) return guard.error;
-  const [exhibitors, billingAddressRequired] = await Promise.all([
+  const [listed, billingAddressRequired] = await Promise.all([
     listExhibitors(eventId),
     isBillingOptionEnabled(guard.uid),
   ]);
+  // 場所QR用スタンプコードの遅延発行: 導入前の旧参加店にはコンソール
+  // 表示のタイミングで発行し、この応答から使えるようにする。
+  const exhibitors = await Promise.all(
+    listed.map(async (exhibitor) => {
+      if (exhibitor.stampCode) return exhibitor;
+      const stampCode = await ensureExhibitorStampCode(eventId, exhibitor);
+      return stampCode ? { ...exhibitor, stampCode } : exhibitor;
+    }),
+  );
   return NextResponse.json({ exhibitors, billingAddressRequired });
 }
 
@@ -90,6 +103,8 @@ export async function POST(
       source: 'admin' as const,
       delistedAt: null,
       closedAt: null,
+      stampCode: null,
+      stampLocation: null,
     };
     // コード自体はレスポンスに含めない（メールでのみ出店者に渡る）。
     // メール送信の成否は mailSent で返す（失敗しても登録は成立しているので、

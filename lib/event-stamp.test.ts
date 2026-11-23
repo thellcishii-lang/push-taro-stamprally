@@ -6,10 +6,13 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { describe, expect, it } from 'vitest';
 import type { EventExhibitor } from './event-coupon';
 import {
+  STAMP_GPS_RADIUS_M,
   buildStampRewardSnapshot,
+  evaluateGpsStamp,
   evaluateStampCancel,
   grantStamp,
   isRoundCompleted,
+  parseStampMethod,
   redeemFreeCoupon,
   resolveCurrentRound,
   stampIdFor,
@@ -143,6 +146,8 @@ describe('協賛（広告専用）アカウントのガード', () => {
     source: 'admin',
     delistedAt: null,
     closedAt: null,
+    stampCode: null,
+    stampLocation: null,
   };
 
   it('協賛アカウントはスタンプを押せない（403）', async () => {
@@ -163,5 +168,72 @@ describe('協賛（広告専用）アカウントのガード', () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.status).toBe(403);
+  });
+});
+
+describe('parseStampMethod（付与方式の読み取り）', () => {
+  it('新しい方式はそのまま読む', () => {
+    expect(parseStampMethod('placed-qr')).toBe('placed-qr');
+    expect(parseStampMethod('gps')).toBe('gps');
+    expect(parseStampMethod('shop-qr')).toBe('shop-qr');
+  });
+  it('未設定・未知の値は従来方式に倒す（後方互換）', () => {
+    expect(parseStampMethod(undefined)).toBe('shop-qr');
+    expect(parseStampMethod(null)).toBe('shop-qr');
+    expect(parseStampMethod('unknown')).toBe('shop-qr');
+  });
+});
+
+describe('evaluateGpsStamp（GPS スタンプの近接判定）', () => {
+  const spot = { lat: 35.8544, lng: 139.3211 };
+
+  it('判定半径は 150m（定数1箇所）', () => {
+    expect(STAMP_GPS_RADIUS_M).toBe(150);
+  });
+
+  it('スポットの座標そのものなら付与可', () => {
+    const result = evaluateGpsStamp(spot, spot);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.distanceMeters).toBe(0);
+  });
+
+  it('半径内（約100m）なら付与可', () => {
+    const result = evaluateGpsStamp(
+      { lat: spot.lat + 0.0009, lng: spot.lng },
+      spot,
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('半径外（約1km）は 403 で、近づく距離入りの文言', () => {
+    const result = evaluateGpsStamp(
+      { lat: spot.lat + 0.009, lng: spot.lng },
+      spot,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(403);
+      expect(result.error).toContain('近づいてください');
+    }
+  });
+
+  it('座標が読めない入力は 400（位置情報が取得できていない）', () => {
+    for (const bad of [null, undefined, {}, { lat: 'x', lng: 139 }, { lat: 91, lng: 139 }]) {
+      const result = evaluateGpsStamp(bad, spot);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.status).toBe(400);
+        expect(result.error).toContain('位置情報が取得できませんでした');
+      }
+    }
+  });
+
+  it('スポット座標が未設定なら 400（GPS 非対応）', () => {
+    const result = evaluateGpsStamp(spot, null);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(400);
+      expect(result.error).toContain('GPSスタンプに対応していません');
+    }
   });
 });

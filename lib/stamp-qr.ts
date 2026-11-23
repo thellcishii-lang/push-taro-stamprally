@@ -26,6 +26,56 @@ export type RedeemQrPayload =
   | FreeCouponQrPayload
   | { type: 'claim'; claimId: string };
 
+// ─── 場所QR（チェックポイントに貼る QR）用のスタンプコード ───
+//
+// 参加店（チェックポイント）ごとに1つ持つ推測不能なコード。QR の飛び先は
+// {アプリorigin}/e/{eventId}?stamp={stampCode} で、来場者が読むとその
+// スポットのスタンプが付く。コードは参加店ドキュメントの stampCode
+// フィールドが正で、再発行すると旧コードは即無効になる（照合は現在の
+// 値との一致だけを見る）。
+
+/** 読み間違えやすい文字（0/O、1/I/L）を除いた英数字（アクセスコードと同じ）。 */
+export const STAMP_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export const STAMP_CODE_LENGTH = 20;
+
+function defaultRandomBytes(size: number): Uint8Array {
+  const bytes = new Uint8Array(size);
+  globalThis.crypto.getRandomValues(bytes);
+  return bytes;
+}
+
+/**
+ * スタンプコードを生成する。アルファベット長で割り切れる範囲までの
+ * バイトだけを使って偏りを無くす（リジェクションサンプリング、
+ * アクセスコード生成と同じ作法）。乱数源はテスト用に差し替え可能。
+ */
+export function generateStampCode(
+  randomBytes: (size: number) => Uint8Array = defaultRandomBytes,
+): string {
+  const alphabet = STAMP_CODE_ALPHABET;
+  const limit = 256 - (256 % alphabet.length);
+  let code = '';
+  while (code.length < STAMP_CODE_LENGTH) {
+    const bytes = randomBytes(STAMP_CODE_LENGTH - code.length + 8);
+    for (const byte of bytes) {
+      if (byte >= limit) continue;
+      code += alphabet[byte % alphabet.length];
+      if (code.length >= STAMP_CODE_LENGTH) break;
+    }
+  }
+  return code;
+}
+
+/** スタンプコードの形式検証（長さと使用文字）。照合前の入力チェック用。 */
+export function isValidStampCode(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  if (value.length !== STAMP_CODE_LENGTH) return false;
+  for (const ch of value) {
+    if (!STAMP_CODE_ALPHABET.includes(ch)) return false;
+  }
+  return true;
+}
+
 /** スタンプ用 QR の表示文字列（お客さんの来場者画面が出す）。 */
 export function buildStampQrPayload(eventId: string, memberId: string): string {
   return JSON.stringify({ v: 1, type: 'stamp', eventId, memberId });

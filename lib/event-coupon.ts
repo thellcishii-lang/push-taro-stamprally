@@ -21,6 +21,8 @@ import { getEvent } from './event-store';
 import { normalizeLocale, parseLocalizedTexts, pickLocalizedText, resolveLocale, type Locale } from './i18n';
 import { translateText } from './translate';
 import { uiText } from './ui-text';
+import { parseGeoPoint, type GeoPoint } from './geocode';
+import { generateStampCode, isValidStampCode } from './stamp-qr';
 
 // exhibitors / coupons はリセット・終了削除の対象外（個人情報を含まない台帳）。
 // 削除対象は EVENT_SUBCOLLECTIONS の4つ（subscribers/members/claims/redemptions）。
@@ -89,9 +91,22 @@ export interface EventExhibitor {
    * ログイン照合では存在しないものとして扱う。未閉店は null。
    */
   closedAt: string | null;
+  /**
+   * 場所QR（チェックポイントに貼る QR）用のスタンプコード。参加店だけが
+   * 持ち、作成時に自動発行される。導入前の旧ドキュメントは null で、
+   * 主催者コンソールの表示時に遅延発行される（ensureExhibitorStampCode）。
+   * 協賛アカウントは常に null。
+   */
+  stampCode: string | null;
+  /**
+   * GPS スタンプの判定に使うスポットの座標。主催者がコンソールで設定
+   * する（住所ジオコーディング／数値入力）。未設定は null で、その
+   * スポットは GPS では押せない。
+   */
+  stampLocation: GeoPoint | null;
 }
 
-function mapExhibitor(
+export function mapExhibitor(
   id: string,
   data: Record<string, unknown>,
 ): EventExhibitor {
@@ -115,6 +130,8 @@ function mapExhibitor(
       typeof data.closedAt === 'string' && data.closedAt
         ? data.closedAt
         : null,
+    stampCode: isValidStampCode(data.stampCode) ? data.stampCode : null,
+    stampLocation: parseGeoPoint(data.stampLocation),
   };
 }
 
@@ -279,6 +296,7 @@ export async function createExhibitor(
     : exhibitorsRef(eventId).doc();
   const email = input.email?.trim().toLowerCase() || null;
   const address = input.address?.trim() || null;
+  const kind = input.kind ?? 'shop';
   const exhibitor: EventExhibitor = {
     id: ref.id,
     name,
@@ -286,10 +304,14 @@ export async function createExhibitor(
     address,
     hasAccessCode: false,
     lang: resolveLocale(input.lang, event?.defaultLocale),
-    kind: input.kind ?? 'shop',
+    kind,
     source: input.source ?? 'admin',
     delistedAt: null,
     closedAt: null,
+    // 場所QR用のスタンプコードは参加店だけに作成時自動発行する
+    // （協賛はチェックポイントではないため持たない）。
+    stampCode: kind === 'shop' ? generateStampCode() : null,
+    stampLocation: null,
   };
   // hasAccessCode / delistedAt / closedAt はドキュメントの実フィールドから
   // 導く表示用の値で、作成時に保存するのは実フィールド（email / address /
@@ -316,6 +338,55 @@ export async function getExhibitor(
   const doc = await exhibitorsRef(eventId).doc(exhibitorId).get();
   if (!doc.exists) return null;
   return mapExhibitor(doc.id, doc.data()!);
+}
+
+// ─── 場所QRコード / GPS座標（スタンプ認証） ───
+
+/**
+ * スタンプコードが無ければ発行して返す（遅延発行）。導入前の旧参加店
+ * ドキュメント向けで、主催者コンソールの表示時に呼ばれる。協賛・閉店
+ * 扱いのアカウントには発行しない（null）。
+ */
+export async function ensureExhibitorStampCode(
+  eventId: string,
+  exhibitor: EventExhibitor,
+): Promise<string | null> {
+  if (exhibitor.stampCode) return exhibitor.stampCode;
+  if (exhibitor.kind !== 'shop' || exhibitor.closedAt) return null;
+  const stampCode = generateStampCode();
+  await exhibitorsRef(eventId)
+    .doc(exhibitor.id)
+    .update({ stampCode });
+  return stampCode;
+}
+
+/**
+ * スタンプコードを再発行する。保存値を差し替えるだけなので、旧コードは
+ * その時点で無効になる。対象が無ければ null。
+ */
+export async function regenerateExhibitorStampCode(
+  eventId: string,
+  exhibitorId: string,
+): Promise<string | null> {
+  const exhibitor = await getExhibitor(eventId, exhibitorId);
+  if (!exhibitor || exhibitor.kind !== 'shop') return null;
+  const stampCode = generateStampCode();
+  await exhibitorsRef(eventId).doc(exhibitorId).update({ stampCode });
+  return stampCode;
+}
+
+/** GPS スタンプ用のスポット座標を保存する（null で解除）。対象が無ければ false。 */
+export async function updateExhibitorStampLocation(
+  eventId: string,
+  exhibitorId: string,
+  location: GeoPoint | null,
+): Promise<boolean> {
+  const exhibitor = await getExhibitor(eventId, exhibitorId);
+  if (!exhibitor) return false;
+  await exhibitorsRef(eventId)
+    .doc(exhibitorId)
+    .update({ stampLocation: location });
+  return true;
 }
 
 // ─── クーポン ───
