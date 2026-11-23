@@ -3,7 +3,7 @@
 // 成功・該当なし・HTTPエラー・例外・不正な応答のすべてで
 // 「座標が取れるか null か」だけが決まることを確認する。
 import { describe, expect, it, vi } from 'vitest';
-import { geocodeAddress } from './geocode';
+import { geocodeAddress, haversineMeters, parseGeoPoint } from './geocode';
 
 function fetchReturning(body: unknown, ok = true): typeof fetch {
   return vi.fn(async () => ({
@@ -69,5 +69,55 @@ describe('geocodeAddress', () => {
     const fetchFn = fetchReturning([{ lat: '35.0', lon: '139.0' }]);
     await expect(geocodeAddress('   ', fetchFn)).resolves.toBeNull();
     expect(fetchFn).not.toHaveBeenCalled();
+  });
+});
+
+describe('haversineMeters', () => {
+  it('同じ点同士は 0m', () => {
+    const p = { lat: 35.6812, lng: 139.7671 };
+    expect(haversineMeters(p, p)).toBe(0);
+  });
+
+  it('緯度1度は約111km', () => {
+    const d = haversineMeters({ lat: 35, lng: 139 }, { lat: 36, lng: 139 });
+    expect(d).toBeGreaterThan(110_000);
+    expect(d).toBeLessThan(112_000);
+  });
+
+  it('東京駅〜新宿駅は約6〜7km', () => {
+    const d = haversineMeters(
+      { lat: 35.6812, lng: 139.7671 },
+      { lat: 35.6896, lng: 139.7006 },
+    );
+    expect(d).toBeGreaterThan(6_000);
+    expect(d).toBeLessThan(7_000);
+  });
+
+  it('近い2点（約100m）も妥当に測れる', () => {
+    // 緯度 0.0009 度 ≒ 100m
+    const d = haversineMeters(
+      { lat: 35.8544, lng: 139.3211 },
+      { lat: 35.8553, lng: 139.3211 },
+    );
+    expect(d).toBeGreaterThan(90);
+    expect(d).toBeLessThan(110);
+  });
+});
+
+describe('parseGeoPoint', () => {
+  it('数値の組なら座標として読む', () => {
+    expect(parseGeoPoint({ lat: 35.85, lng: 139.32 })).toEqual({
+      lat: 35.85,
+      lng: 139.32,
+    });
+  });
+  it('範囲外・文字列・欠けは null', () => {
+    expect(parseGeoPoint({ lat: 91, lng: 139 })).toBeNull();
+    expect(parseGeoPoint({ lat: 35, lng: 181 })).toBeNull();
+    expect(parseGeoPoint({ lat: '35.85', lng: 139.32 })).toBeNull();
+    expect(parseGeoPoint({ lat: 35.85 })).toBeNull();
+    expect(parseGeoPoint(null)).toBeNull();
+    expect(parseGeoPoint(undefined)).toBeNull();
+    expect(parseGeoPoint('35.85,139.32')).toBeNull();
   });
 });

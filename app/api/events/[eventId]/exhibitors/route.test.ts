@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   requireEventOwner: vi.fn(),
   listExhibitors: vi.fn(),
+  ensureExhibitorStampCode: vi.fn(),
   registerExhibitor: vi.fn(),
   findOrganizerByOwnerUid: vi.fn(),
 }));
@@ -21,6 +22,7 @@ vi.mock('@/lib/organizers', () => ({
 }));
 vi.mock('@/lib/event-coupon', () => ({
   listExhibitors: mocks.listExhibitors,
+  ensureExhibitorStampCode: mocks.ensureExhibitorStampCode,
   // 実装と同じ規則（'advertiser' のみ協賛、それ以外は参加店）
   parseExhibitorKind: (value: unknown) =>
     value === 'advertiser' ? 'advertiser' : 'shop',
@@ -85,6 +87,8 @@ beforeEach(() => {
   mocks.listExhibitors.mockResolvedValue([
     { id: 'exh-1', name: 'テスト出店者', email: EMAIL, address: null, hasAccessCode: true, lang: 'ja' },
   ]);
+  // 既定では遅延発行しても新しいコードは返らない（従来表示のまま）
+  mocks.ensureExhibitorStampCode.mockResolvedValue(null);
   mocks.registerExhibitor.mockResolvedValue({
     exhibitorId: 'exh-1',
     email: EMAIL,
@@ -188,5 +192,38 @@ describe('GET /api/events/[eventId]/exhibitors', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.billingAddressRequired).toBe(true);
+  });
+
+  it('スタンプコードが無い参加店には表示時に遅延発行して返す', async () => {
+    mocks.ensureExhibitorStampCode.mockResolvedValue('ABCDEFGHJKMNPQRSTUVW');
+    const response = await GET(getRequest(), {
+      params: Promise.resolve({ eventId: EVENT_ID }),
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(mocks.ensureExhibitorStampCode).toHaveBeenCalledWith(
+      EVENT_ID,
+      expect.objectContaining({ id: 'exh-1' }),
+    );
+    expect(body.exhibitors[0].stampCode).toBe('ABCDEFGHJKMNPQRSTUVW');
+  });
+
+  it('スタンプコードがある参加店には遅延発行しない', async () => {
+    mocks.listExhibitors.mockResolvedValue([
+      {
+        id: 'exh-1',
+        name: 'テスト出店者',
+        email: EMAIL,
+        address: null,
+        hasAccessCode: true,
+        lang: 'ja',
+        stampCode: 'ABCDEFGHJKMNPQRSTUVW',
+      },
+    ]);
+    const response = await GET(getRequest(), {
+      params: Promise.resolve({ eventId: EVENT_ID }),
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.ensureExhibitorStampCode).not.toHaveBeenCalled();
   });
 });

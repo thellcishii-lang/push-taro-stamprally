@@ -27,6 +27,14 @@ export function eventVisitorUrl(eventId: string): string {
 }
 
 /**
+ * 場所QR（チェックポイントに貼る QR）の飛び先 URL。来場者ページが
+ * stamp パラメータを検出すると、そのスポットのスタンプ付与に進む。
+ */
+export function eventStampQrUrl(eventId: string, stampCode: string): string {
+  return `${eventVisitorUrl(eventId)}?stamp=${encodeURIComponent(stampCode)}`;
+}
+
+/**
  * 参加店の自己登録ページの URL。どこからもリンクされていないため、
  * 主催者がこの URL を店へ直接渡して案内する（管理画面に表示する）。
  */
