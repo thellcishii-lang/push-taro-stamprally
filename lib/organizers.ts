@@ -60,6 +60,14 @@ export interface Organizer {
    */
   adsOptionEnabled: boolean;
   /**
+   * ポータル（特設サイト本契約）が有効かどうか。既定は無効（false）。
+   * 有効な契約ではクーポン・特典の管理がポータル側に寄り、アプリ側は
+   * グレーアウトする（管理場所は常に1か所）。イベント側の
+   * portalEnabled へ作成時継承・更新時伝播する。
+   * 旧レコード（フィールド自体が無い）は false 扱い。
+   */
+  portalEnabled: boolean;
+  /**
    * 世界観の名前（例: 飯能カレー）。申込時に本家から送られてくる希望名で、
    * プロジェクト作成フォームのプロジェクト名の初期値に使う。
    * 旧レコード（フィールド自体が無い）は '' 扱い。
@@ -113,6 +121,7 @@ function toOrganizer(id: string, data: FirebaseFirestore.DocumentData): Organize
     agencyCode: (data.agencyCode as string | null) ?? null,
     billingOptionEnabled: data.billingOptionEnabled === true,
     adsOptionEnabled: data.adsOptionEnabled === true,
+    portalEnabled: data.portalEnabled === true,
     worldName: typeof data.worldName === 'string' ? data.worldName : '',
     smsAuthEnabled: data.smsAuthEnabled === true,
     smsBalance:
@@ -196,6 +205,7 @@ export async function updateOrganizer(
     status?: OrganizerStatus;
     billingOptionEnabled?: boolean;
     adsOptionEnabled?: boolean;
+    portalEnabled?: boolean;
   },
 ): Promise<boolean> {
   const ref = db.collection(ORGANIZERS_COLLECTION).doc(contractId);
@@ -219,6 +229,8 @@ export interface CreateOrganizerData {
   agencyCode?: string | null;
   billingOptionEnabled?: boolean;
   adsOptionEnabled?: boolean;
+  /** ポータル（特設サイト本契約）が有効か。未指定は false */
+  portalEnabled?: boolean;
   worldName?: string;
   /** SMS認証を使うか。未指定は false（端末認証） */
   smsAuthEnabled?: boolean;
@@ -250,6 +262,7 @@ export async function createOrganizerRecord(
       agencyCode: data.agencyCode ?? null,
       billingOptionEnabled: data.billingOptionEnabled ?? false,
       adsOptionEnabled: data.adsOptionEnabled ?? false,
+      portalEnabled: data.portalEnabled ?? false,
       worldName: data.worldName ?? '',
       smsAuthEnabled: data.smsAuthEnabled ?? false,
       smsBalance:
@@ -288,6 +301,8 @@ export interface ProvisioningProfilePatch {
   billingOptionEnabled?: boolean;
   /** 広告オプションの ON/OFF。送られた場合だけ反映する */
   adsOptionEnabled?: boolean;
+  /** ポータル（特設サイト本契約）の ON/OFF。送られた場合だけ反映する */
+  portalEnabled?: boolean;
   /** 世界観の名前。送られた場合だけ反映する */
   worldName?: string;
   /** SMS認証の ON/OFF。送られた場合だけ反映する */
