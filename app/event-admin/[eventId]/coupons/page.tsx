@@ -168,6 +168,11 @@ export default function EventCouponAdminPage() {
     title: '',
     description: '',
     keywords: '',
+    // 取得・使用期間（'YYYY-MM-DD'、空欄は制限なし）
+    claimFrom: '',
+    claimUntil: '',
+    useFrom: '',
+    useUntil: '',
   });
   const [message, setMessage] = useState('');
   const [loadMessage, setLoadMessage] = useState('');
@@ -403,9 +408,22 @@ export default function EventCouponAdminPage() {
             .split(/[,、]/)
             .map((k) => k.trim())
             .filter(Boolean),
+          claimFrom: couponForm.claimFrom || undefined,
+          claimUntil: couponForm.claimUntil || undefined,
+          useFrom: couponForm.useFrom || undefined,
+          useUntil: couponForm.useUntil || undefined,
         }),
       });
-      setCouponForm({ ...couponForm, title: '', description: '', keywords: '' });
+      setCouponForm({
+        ...couponForm,
+        title: '',
+        description: '',
+        keywords: '',
+        claimFrom: '',
+        claimUntil: '',
+        useFrom: '',
+        useUntil: '',
+      });
       setCouponMessage(adminText(locale, 'couponAdded'));
       // 別出店者で絞り込み中だと新規行が見えないため、絞り込みを外してから表示する。
       setCouponExhibitorFilter(null);
@@ -1019,6 +1037,22 @@ export default function EventCouponAdminPage() {
           <label style={labelStyle}>
             {adminText(locale, 'couponKeywordsLabel')}
             <input style={inputStyle} value={couponForm.keywords} onChange={(e) => setCouponForm({ ...couponForm, keywords: e.target.value })} placeholder={adminText(locale, 'couponKeywordsPlaceholder')} />
+          </label>
+          <label style={labelStyle}>
+            {adminText(locale, 'couponClaimFromLabel')}
+            <input type="date" style={inputStyle} value={couponForm.claimFrom} onChange={(e) => setCouponForm({ ...couponForm, claimFrom: e.target.value })} />
+          </label>
+          <label style={labelStyle}>
+            {adminText(locale, 'couponClaimUntilLabel')}
+            <input type="date" style={inputStyle} value={couponForm.claimUntil} onChange={(e) => setCouponForm({ ...couponForm, claimUntil: e.target.value })} />
+          </label>
+          <label style={labelStyle}>
+            {adminText(locale, 'couponUseFromLabel')}
+            <input type="date" style={inputStyle} value={couponForm.useFrom} onChange={(e) => setCouponForm({ ...couponForm, useFrom: e.target.value })} />
+          </label>
+          <label style={labelStyle}>
+            {adminText(locale, 'couponUseUntilLabel')}
+            <input type="date" style={inputStyle} value={couponForm.useUntil} onChange={(e) => setCouponForm({ ...couponForm, useUntil: e.target.value })} />
           </label>
           <button
             onClick={handleAddCoupon}

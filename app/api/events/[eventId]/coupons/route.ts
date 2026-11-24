@@ -49,6 +49,10 @@ export async function POST(
       keywords: Array.isArray(body.keywords)
         ? body.keywords.filter((k): k is string => typeof k === 'string')
         : undefined,
+      claimFrom: typeof body.claimFrom === 'string' ? body.claimFrom : undefined,
+      claimUntil: typeof body.claimUntil === 'string' ? body.claimUntil : undefined,
+      useFrom: typeof body.useFrom === 'string' ? body.useFrom : undefined,
+      useUntil: typeof body.useUntil === 'string' ? body.useUntil : undefined,
     });
     return NextResponse.json({ coupon }, { status: 201 });
   } catch (error) {
