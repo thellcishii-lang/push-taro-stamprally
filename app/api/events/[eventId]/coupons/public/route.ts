@@ -7,7 +7,12 @@
 // （消し込み側のルートは変更しない）。
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
-import { filterCoupons, listCoupons } from '@/lib/event-coupon';
+import {
+  couponClaimState,
+  filterCoupons,
+  jstTodayString,
+  listCoupons,
+} from '@/lib/event-coupon';
 import { getEvent } from '@/lib/event-store';
 import { listBillingSuspendedExhibitorIds } from '@/lib/event-shop';
 import { normalizeLocale, pickLocalizedText } from '@/lib/i18n';
@@ -27,6 +32,7 @@ export async function GET(
   const active = (await listCoupons(eventId)).filter(
     (coupon) => coupon.active && !suspended.has(coupon.exhibitorId),
   );
+  const today = jstTodayString();
   const coupons = filterCoupons(active, query).map((coupon) => ({
     id: coupon.id,
     title:
@@ -38,6 +44,13 @@ export async function GET(
     exhibitorId: coupon.exhibitorId,
     exhibitorName: coupon.exhibitorName,
     keywords: coupon.keywords,
+    // 取得・使用期間（告知中の先行取得では、開始前・終了後も見せて
+    // claimState で出し分ける）
+    claimFrom: coupon.claimFrom,
+    claimUntil: coupon.claimUntil,
+    useFrom: coupon.useFrom,
+    useUntil: coupon.useUntil,
+    claimState: couponClaimState(coupon, today),
   }));
   return NextResponse.json({ coupons });
 }

@@ -4,12 +4,17 @@ import {
   EventClaim,
   EventCoupon,
   claimIdFor,
+  couponClaimState,
   evaluateRedemption,
   filterCoupons,
   isCouponCapReached,
+  isCouponUseAllowedOn,
+  jstTodayString,
   memberIdForDevice,
   memberIdForPhone,
+  normalizeCouponWindows,
   parseCouponIssuedBy,
+  parseCouponWindowDate,
   parseExhibitorKind,
   tallyClaimsByCoupon,
 } from './event-coupon';
@@ -27,6 +32,10 @@ const couponA: EventCoupon = {
   issuedBy: 'admin',
   paymentPending: false,
   feeAmount: null,
+  claimFrom: null,
+  claimUntil: null,
+  useFrom: null,
+  useUntil: null,
 };
 const couponB: EventCoupon = {
   id: 'coupon-b',
@@ -41,6 +50,10 @@ const couponB: EventCoupon = {
   issuedBy: 'admin',
   paymentPending: false,
   feeAmount: null,
+  claimFrom: null,
+  claimUntil: null,
+  useFrom: null,
+  useUntil: null,
 };
 const claimedClaim: Pick<EventClaim, 'status'> = { status: 'claimed' };
 const redeemedClaim: Pick<EventClaim, 'status'> = { status: 'redeemed' };
@@ -186,5 +199,82 @@ describe('parseCouponIssuedBy（クーポンの発行元）', () => {
     expect(parseCouponIssuedBy(undefined)).toBe('admin');
     expect(parseCouponIssuedBy(null)).toBe('admin');
     expect(parseCouponIssuedBy('other')).toBe('admin');
+  });
+});
+
+describe('クーポンの取得・使用期間', () => {
+  it('parseCouponWindowDate は形式が合う日付だけ通す', () => {
+    expect(parseCouponWindowDate('2026-12-01')).toBe('2026-12-01');
+    expect(parseCouponWindowDate('2026/12/01')).toBeNull();
+    expect(parseCouponWindowDate(undefined)).toBeNull();
+    expect(parseCouponWindowDate(null)).toBeNull();
+    expect(parseCouponWindowDate(20261201)).toBeNull();
+  });
+
+  it('normalizeCouponWindows は未指定を制限なしにし、逆転した期間を弾く', () => {
+    expect(normalizeCouponWindows({})).toEqual({
+      claimFrom: null,
+      claimUntil: null,
+      useFrom: null,
+      useUntil: null,
+    });
+    expect(
+      normalizeCouponWindows({ claimFrom: '2026-11-01', useUntil: '2026-12-31' }),
+    ).toEqual({
+      claimFrom: '2026-11-01',
+      claimUntil: null,
+      useFrom: null,
+      useUntil: '2026-12-31',
+    });
+    expect(() =>
+      normalizeCouponWindows({ claimFrom: '2026-12-02', claimUntil: '2026-12-01' }),
+    ).toThrow();
+    expect(() =>
+      normalizeCouponWindows({ useFrom: '2026-12-02', useUntil: '2026-12-01' }),
+    ).toThrow();
+    expect(() => normalizeCouponWindows({ claimFrom: '2026-02-31' })).toThrow();
+    expect(() => normalizeCouponWindows({ claimFrom: '12/01' })).toThrow();
+  });
+
+  it('couponClaimState は開始前・期間内・終了後を切り分ける（境界日は期間内）', () => {
+    const coupon = { claimFrom: '2026-11-10', claimUntil: '2026-11-20' };
+    expect(couponClaimState(coupon, '2026-11-09')).toBe('upcoming');
+    expect(couponClaimState(coupon, '2026-11-10')).toBe('open');
+    expect(couponClaimState(coupon, '2026-11-20')).toBe('open');
+    expect(couponClaimState(coupon, '2026-11-21')).toBe('closed');
+    expect(couponClaimState({ claimFrom: null, claimUntil: null }, '2026-11-15')).toBe('open');
+  });
+
+  it('isCouponUseAllowedOn は使用期間の内外を判定する', () => {
+    const coupon = { useFrom: '2026-12-01', useUntil: '2026-12-31' };
+    expect(isCouponUseAllowedOn(coupon, '2026-11-30')).toBe(false);
+    expect(isCouponUseAllowedOn(coupon, '2026-12-01')).toBe(true);
+    expect(isCouponUseAllowedOn(coupon, '2026-12-31')).toBe(true);
+    expect(isCouponUseAllowedOn(coupon, '2027-01-01')).toBe(false);
+    expect(isCouponUseAllowedOn({ useFrom: null, useUntil: null }, '2026-12-15')).toBe(true);
+  });
+
+  it('jstTodayString は JST の日付を返す', () => {
+    // UTC 2026-11-23 16:30 = JST 2026-11-24 01:30
+    expect(jstTodayString(new Date('2026-11-23T16:30:00.000Z'))).toBe('2026-11-24');
+    expect(jstTodayString(new Date('2026-11-23T14:59:00.000Z'))).toBe('2026-11-23');
+  });
+
+  it('evaluateRedemption は使用期間外を弾き、日付未指定では判定しない', () => {
+    const windowed = { ...couponA, useFrom: '2026-12-01', useUntil: '2026-12-31' };
+    expect(
+      evaluateRedemption({ type: 'organizer' }, windowed, claimedClaim, '2026-11-30'),
+    ).toEqual({ allowed: false, reason: 'outside-use-window' });
+    expect(
+      evaluateRedemption({ type: 'organizer' }, windowed, claimedClaim, '2026-12-15'),
+    ).toEqual({ allowed: true });
+    // 日付を渡さない従来の呼び出しでは期間判定をしない
+    expect(evaluateRedemption({ type: 'organizer' }, windowed, claimedClaim)).toEqual({
+      allowed: true,
+    });
+    // 消込済みは期間より先に already-redeemed で返す
+    expect(
+      evaluateRedemption({ type: 'organizer' }, windowed, redeemedClaim, '2026-11-30'),
+    ).toEqual({ allowed: false, reason: 'already-redeemed' });
   });
 });

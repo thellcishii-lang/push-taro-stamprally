@@ -110,6 +110,12 @@ interface PublicCoupon {
   description: string;
   exhibitorName: string;
   keywords: string[];
+  /** 取得・使用期間（'YYYY-MM-DD'、null は制限なし）。旧 API 応答では欠ける */
+  claimFrom?: string | null;
+  claimUntil?: string | null;
+  useFrom?: string | null;
+  useUntil?: string | null;
+  claimState?: 'upcoming' | 'open' | 'closed';
 }
 
 interface MemberClaim {
@@ -2271,8 +2277,15 @@ export default function EventVisitorPage() {
               </h2>
               {myClaims.map((claim) => {
                 const catalogCoupon = couponById.get(claim.couponId);
+                const useWindowText =
+                  catalogCoupon && (catalogCoupon.useFrom || catalogCoupon.useUntil)
+                    ? uiText(locale, 'couponUseWindow', {
+                        range: `${catalogCoupon.useFrom ?? ''}〜${catalogCoupon.useUntil ?? ''}`,
+                      })
+                    : undefined;
                 const detailParts = [
                   catalogCoupon?.description,
+                  useWindowText,
                   uiText(locale, 'validUntil', { date: endDateLabel }),
                 ].filter((part): part is string => Boolean(part));
                 return claim.status === 'redeemed' ? (
@@ -3087,10 +3100,20 @@ export default function EventVisitorPage() {
                             {coupon.description}
                           </p>
                         )}
+                        {!claim && coupon.claimState === 'upcoming' && coupon.claimFrom && (
+                          <p style={{ fontSize: 13, color: '#b45309', marginTop: 4, fontWeight: 700 }}>
+                            {uiText(locale, 'couponClaimUpcoming', { date: coupon.claimFrom })}
+                          </p>
+                        )}
+                        {!claim && coupon.claimState === 'closed' && (
+                          <p style={{ fontSize: 13, color: '#64748b', marginTop: 4, fontWeight: 700 }}>
+                            {uiText(locale, 'couponClaimClosed')}
+                          </p>
+                        )}
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
                           <button
                             onClick={() => void handleClaim(coupon.id)}
-                            disabled={busy || claim !== undefined}
+                            disabled={busy || claim !== undefined || (coupon.claimState !== undefined && coupon.claimState !== 'open')}
                             style={{
                               padding: '10px 22px',
                               fontWeight: 700,

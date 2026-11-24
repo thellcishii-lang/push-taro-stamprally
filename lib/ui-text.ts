@@ -229,6 +229,24 @@ export const UI_TEXT = {
     zh: '领取',
     ko: '받기',
   },
+  couponClaimUpcoming: {
+    ja: '{date} から取得できます',
+    en: 'Available from {date}',
+    zh: '自 {date} 起可领取',
+    ko: '{date}부터 받을 수 있습니다',
+  },
+  couponClaimClosed: {
+    ja: '取得期間は終了しました',
+    en: 'The claim period has ended',
+    zh: '领取期间已结束',
+    ko: '받기 기간이 종료되었습니다',
+  },
+  couponUseWindow: {
+    ja: '使える期間: {range}',
+    en: 'Usable period: {range}',
+    zh: '可用期间：{range}',
+    ko: '사용 기간: {range}',
+  },
   claimedButton: {
     ja: '取得済み',
     en: 'Claimed',
@@ -3190,6 +3208,30 @@ export const ADMIN_TEXT = {
     en: 'e.g. drinks, free',
     zh: '例：饮料, 免费',
     ko: '예: 음료, 무료',
+  },
+  couponClaimFromLabel: {
+    ja: '取得できる日（開始、任意）',
+    en: 'Claim start date (optional)',
+    zh: '可领取日期（开始，可选）',
+    ko: '받기 시작일(선택)',
+  },
+  couponClaimUntilLabel: {
+    ja: '取得できる日（終了、任意）',
+    en: 'Claim end date (optional)',
+    zh: '可领取日期（结束，可选）',
+    ko: '받기 종료일(선택)',
+  },
+  couponUseFromLabel: {
+    ja: '使える日（開始、任意）',
+    en: 'Usable from (optional)',
+    zh: '可用日期（开始，可选）',
+    ko: '사용 시작일(선택)',
+  },
+  couponUseUntilLabel: {
+    ja: '使える日（終了、任意）',
+    en: 'Usable until (optional)',
+    zh: '可用日期（结束，可选）',
+    ko: '사용 종료일(선택)',
   },
   addCouponButton: {
     ja: 'クーポンを登録',

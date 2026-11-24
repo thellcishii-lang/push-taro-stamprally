@@ -19,6 +19,16 @@ vi.mock('@/lib/event-coupon', () => ({
           c.title.includes(query.trim()),
         )
       : coupons,
+  // 実物と同じ意味の最小実装。
+  jstTodayString: () => '2026-11-24',
+  couponClaimState: (
+    coupon: { claimFrom?: string | null; claimUntil?: string | null },
+    today: string,
+  ) => {
+    if (coupon.claimFrom && today < coupon.claimFrom) return 'upcoming';
+    if (coupon.claimUntil && today > coupon.claimUntil) return 'closed';
+    return 'open';
+  },
 }));
 vi.mock('@/lib/event-store', () => ({
   getEvent: mocks.getEvent,

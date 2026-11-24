@@ -162,6 +162,110 @@ export interface EventCoupon {
    * 主催者発行・無料発行は null。
    */
   feeAmount: number | null;
+  /**
+   * 取得できる期間の開始日（JST の 'YYYY-MM-DD'）。告知期間中に先に
+   * 取得させて使用は開催期間だけ、という運用のために使用期間と分けて
+   * 持つ。null は制限なし。旧ドキュメント（項目なし）は null に倒す。
+   */
+  claimFrom: string | null;
+  /** 取得できる期間の終了日（JST の 'YYYY-MM-DD'）。null は制限なし。 */
+  claimUntil: string | null;
+  /** 使える期間の開始日（JST の 'YYYY-MM-DD'）。null は制限なし。 */
+  useFrom: string | null;
+  /** 使える期間の終了日（JST の 'YYYY-MM-DD'）。null は制限なし。 */
+  useUntil: string | null;
+}
+
+/** クーポンの取得・使用期間（いずれも JST の 'YYYY-MM-DD'、null は制限なし）。 */
+export interface CouponWindows {
+  claimFrom: string | null;
+  claimUntil: string | null;
+  useFrom: string | null;
+  useUntil: string | null;
+}
+
+const COUPON_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 保存値を防御的に読む（形式が合わなければ null = 制限なしに倒す）。 */
+export function parseCouponWindowDate(value: unknown): string | null {
+  return typeof value === 'string' && COUPON_DATE_PATTERN.test(value)
+    ? value
+    : null;
+}
+
+function parseWindowInput(
+  value: string | null | undefined,
+  label: string,
+): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (!COUPON_DATE_PATTERN.test(value)) {
+    throw new Error(`${label}の形式が不正です`);
+  }
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    throw new Error(`${label}の日付が不正です`);
+  }
+  return value;
+}
+
+/**
+ * 作成入力の期間を検証して正規化する。開始日が終了日より後なら例外。
+ * 未指定（undefined/null/空文字）は制限なし（null）。
+ */
+export function normalizeCouponWindows(
+  input: Partial<Record<keyof CouponWindows, string | null | undefined>>,
+): CouponWindows {
+  const windows: CouponWindows = {
+    claimFrom: parseWindowInput(input.claimFrom, '取得期間の開始日'),
+    claimUntil: parseWindowInput(input.claimUntil, '取得期間の終了日'),
+    useFrom: parseWindowInput(input.useFrom, '使用期間の開始日'),
+    useUntil: parseWindowInput(input.useUntil, '使用期間の終了日'),
+  };
+  if (
+    windows.claimFrom &&
+    windows.claimUntil &&
+    windows.claimFrom > windows.claimUntil
+  ) {
+    throw new Error('取得期間の終了日は開始日以降を指定してください');
+  }
+  if (windows.useFrom && windows.useUntil && windows.useFrom > windows.useUntil) {
+    throw new Error('使用期間の終了日は開始日以降を指定してください');
+  }
+  return windows;
+}
+
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+/** JST の今日（'YYYY-MM-DD'）。期間判定の基準日。 */
+export function jstTodayString(now: Date = new Date()): string {
+  return new Date(now.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+export type CouponClaimState = 'upcoming' | 'open' | 'closed';
+
+/** 指定日（JST）にそのクーポンを取得できる状態かどうか。 */
+export function couponClaimState(
+  coupon: Pick<EventCoupon, 'claimFrom' | 'claimUntil'>,
+  todayJst: string,
+): CouponClaimState {
+  if (coupon.claimFrom && todayJst < coupon.claimFrom) return 'upcoming';
+  if (coupon.claimUntil && todayJst > coupon.claimUntil) return 'closed';
+  return 'open';
+}
+
+/** 指定日（JST）にそのクーポンを使用（消込）できるかどうか。 */
+export function isCouponUseAllowedOn(
+  coupon: Pick<EventCoupon, 'useFrom' | 'useUntil'>,
+  todayJst: string,
+): boolean {
+  if (coupon.useFrom && todayJst < coupon.useFrom) return false;
+  if (coupon.useUntil && todayJst > coupon.useUntil) return false;
+  return true;
 }
 
 export interface EventClaim {
@@ -215,23 +319,36 @@ export type RedemptionActor =
 
 export type RedemptionDecision =
   | { allowed: true }
-  | { allowed: false; reason: 'not-owner' | 'already-redeemed' | 'coupon-inactive' };
+  | {
+      allowed: false;
+      reason:
+        | 'not-owner'
+        | 'already-redeemed'
+        | 'coupon-inactive'
+        | 'outside-use-window';
+    };
 
 /**
  * 消込可否の判定（純粋関数）。
  * - 出店者は自社クーポンのみ。主催者は全クーポン可。
  * - 消込済みの取得記録は二度消しできない。
+ * - todayJst を渡すと使用期間（useFrom/useUntil）も判定する。
+ *   渡さない場合は期間判定をしない（従来の呼び出しとの互換）。
  */
 export function evaluateRedemption(
   actor: RedemptionActor,
-  coupon: Pick<EventCoupon, 'exhibitorId' | 'active'>,
+  coupon: Pick<EventCoupon, 'exhibitorId' | 'active' | 'useFrom' | 'useUntil'>,
   claim: Pick<EventClaim, 'status'>,
+  todayJst?: string,
 ): RedemptionDecision {
   if (actor.type === 'exhibitor' && actor.exhibitorId !== coupon.exhibitorId) {
     return { allowed: false, reason: 'not-owner' };
   }
   if (!coupon.active) return { allowed: false, reason: 'coupon-inactive' };
   if (claim.status === 'redeemed') return { allowed: false, reason: 'already-redeemed' };
+  if (todayJst && !isCouponUseAllowedOn(coupon, todayJst)) {
+    return { allowed: false, reason: 'outside-use-window' };
+  }
   return { allowed: true };
 }
 
@@ -390,6 +507,14 @@ export async function createCoupon(
     paymentPending?: boolean;
     /** 作成時点の発行手数料スナップショット（円）。支払い待ちのときだけ付ける */
     feeAmount?: number | null;
+    /** 取得できる期間の開始日（'YYYY-MM-DD'）。未指定は制限なし */
+    claimFrom?: string | null;
+    /** 取得できる期間の終了日（'YYYY-MM-DD'）。未指定は制限なし */
+    claimUntil?: string | null;
+    /** 使える期間の開始日（'YYYY-MM-DD'）。未指定は制限なし */
+    useFrom?: string | null;
+    /** 使える期間の終了日（'YYYY-MM-DD'）。未指定は制限なし */
+    useUntil?: string | null;
   },
 ): Promise<EventCoupon> {
   const exhibitor = await getExhibitor(eventId, input.exhibitorId);
@@ -415,6 +540,7 @@ export async function createCoupon(
     translateText(description),
   ]);
   const paymentPending = input.paymentPending === true;
+  const windows = normalizeCouponWindows(input);
   const coupon: EventCoupon = {
     id: ref.id,
     exhibitorId: exhibitor.id,
@@ -429,6 +555,7 @@ export async function createCoupon(
     issuedBy: input.issuedBy ?? 'admin',
     paymentPending,
     feeAmount: paymentPending ? (input.feeAmount ?? null) : null,
+    ...windows,
   };
   await ref.set({ ...coupon, createdAt: FieldValue.serverTimestamp() });
   return coupon;
@@ -449,6 +576,10 @@ function mapCoupon(id: string, data: Record<string, unknown>): EventCoupon {
     issuedBy: parseCouponIssuedBy(data.issuedBy),
     paymentPending: data.paymentPending === true,
     feeAmount: typeof data.feeAmount === 'number' ? data.feeAmount : null,
+    claimFrom: parseCouponWindowDate(data.claimFrom),
+    claimUntil: parseCouponWindowDate(data.claimUntil),
+    useFrom: parseCouponWindowDate(data.useFrom),
+    useUntil: parseCouponWindowDate(data.useUntil),
   };
 }
 
@@ -508,6 +639,19 @@ export async function claimCoupon(
   const coupon = await getCoupon(eventId, couponId);
   if (!coupon || !coupon.active) {
     return { ok: false, status: 404, error: 'クーポンが見つかりません' };
+  }
+
+  // 取得期間の判定（告知中に先行取得させる運用では、期間外の取得を止める）
+  const claimState = couponClaimState(coupon, jstTodayString());
+  if (claimState === 'upcoming') {
+    return {
+      ok: false,
+      status: 403,
+      error: `このクーポンは ${coupon.claimFrom} から取得できます`,
+    };
+  }
+  if (claimState === 'closed') {
+    return { ok: false, status: 403, error: 'このクーポンの取得期間は終了しました' };
   }
 
   const claimId = claimIdFor(memberId, couponId);
@@ -621,7 +765,11 @@ export type RedeemResult =
   | { ok: true; claimId: string }
   | { ok: false; status: number; error: string };
 
-type RedemptionRejection = 'not-owner' | 'already-redeemed' | 'coupon-inactive';
+type RedemptionRejection =
+  | 'not-owner'
+  | 'already-redeemed'
+  | 'coupon-inactive'
+  | 'outside-use-window';
 
 const REDEMPTION_ERRORS: Record<
   RedemptionRejection,
@@ -630,6 +778,7 @@ const REDEMPTION_ERRORS: Record<
   'not-owner': { status: 403, error: '他社のクーポンは消込できません' },
   'already-redeemed': { status: 409, error: 'このクーポンは消込済みです' },
   'coupon-inactive': { status: 409, error: 'このクーポンは現在無効です' },
+  'outside-use-window': { status: 403, error: 'このクーポンは使用期間外です' },
 };
 
 export async function redeemClaim(
@@ -663,7 +812,7 @@ export async function redeemClaim(
       return { ok: false, status: 404, error: 'クーポンが見つかりません' } as RedeemResult;
     }
 
-    const decision = evaluateRedemption(actor, coupon, claim);
+    const decision = evaluateRedemption(actor, coupon, claim, jstTodayString());
     if (!decision.allowed) {
       const response = REDEMPTION_ERRORS[decision.reason];
       return { ok: false, status: response.status, error: response.error } as RedeemResult;
