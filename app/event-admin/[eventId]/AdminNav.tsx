@@ -90,6 +90,15 @@ const reviewsIcon = (
   </NavIcon>
 );
 
+const reportIcon = (
+  <NavIcon>
+    <path d="M4 20V10" />
+    <path d="M10 20V4" />
+    <path d="M16 20v-7" />
+    <path d="M22 20H2" />
+  </NavIcon>
+);
+
 const socialIcon = (
   <NavIcon>
     <rect x="3" y="3" width="18" height="18" rx="5" />
@@ -237,6 +246,7 @@ export function AdminNav({
         { key: '⑧', href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit'), icon: siteEditIcon },
         { key: '⑨', href: `/event-admin/${eventId}/ads`, label: adminText(locale, 'navAds'), icon: adsIcon },
         { key: '⑩', href: `/event-admin/${eventId}/push-requests`, label: adminText(locale, 'navPushRequests'), icon: pushIcon },
+        { key: '⑪', href: `/event-admin/${eventId}/report`, label: adminText(locale, 'navActionReport'), icon: reportIcon },
         // 特設サイトは本家（push-taro.com）上の公開ページ。宣伝に使う
         // URL へすぐ飛べるよう、末尾に外部リンクとして置く。
         {
