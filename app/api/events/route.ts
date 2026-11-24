@@ -102,6 +102,8 @@ export async function POST(request: Request) {
         typeof body.admissionQrEnabled === 'boolean'
           ? body.admissionQrEnabled
           : undefined,
+      // ポータル（特設サイト本契約）も契約レコードの現在値を継承する
+      portalEnabled: organizer?.portalEnabled === true,
       subscriberCap: caps.subscriberCap,
       couponCap: caps.couponCap,
       backupRetentionDays: body.backupRetentionDays as number | undefined,

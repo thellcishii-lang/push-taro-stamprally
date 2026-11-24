@@ -319,6 +319,8 @@ export interface CreateEventInput {
   subscriberCap?: number;
   defaultLocale?: Locale;
   admissionQrEnabled?: boolean;
+  /** ポータル（特設サイト本契約）の継承値。未指定はアプリ単独（false） */
+  portalEnabled?: boolean;
   stampGoalCount?: number;
   stampRewardType?: StampRewardType;
   stampBenefitText?: string;

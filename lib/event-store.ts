@@ -199,8 +199,9 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     subscriberCap: input.subscriberCap ?? DEFAULT_SUBSCRIBER_CAP,
     defaultLocale: input.defaultLocale ?? DEFAULT_LOCALE,
     admissionQrEnabled: input.admissionQrEnabled ?? false,
-    // ポータルは本家接続のプロビジョニングが立てる。作成時はアプリ単独
-    portalEnabled: false,
+    // ポータルは契約（主催者レコード）からの継承。未指定はアプリ単独。
+    // 契約後の ON/OFF はプロビジョニングの伝播で追随する
+    portalEnabled: input.portalEnabled === true,
     stampGoalCount: input.stampGoalCount ?? DEFAULT_STAMP_GOAL_COUNT,
     stampRewardType,
     stampBenefitText,
@@ -375,6 +376,51 @@ export async function propagateCapsToOwnerEvents(
   return result;
 }
 
+/**
+ * ポータル（特設サイト本契約）の ON/OFF を、その主催者の
+ * 「終わっていない」イベントへ伝播する。枠の伝播と同じ作法
+ * （冪等・失敗の局所化・個別失敗では throw しない）。
+ * ポータルの接続/解約でクーポン・特典の管理場所が切り替わるため、
+ * 契約レコードだけでなくイベント側の値も追随させる必要がある。
+ */
+export async function propagatePortalEnabledToOwnerEvents(
+  ownerUid: string,
+  portalEnabled: boolean,
+): Promise<CapsPropagationResult> {
+  const result: CapsPropagationResult = { updatedEventIds: [], failed: [] };
+
+  const events = await listEventsByOwner(ownerUid);
+  const targets = events.filter(receivesCapsPropagation);
+
+  for (let i = 0; i < targets.length; i += UPDATE_CHUNK_SIZE) {
+    const chunk = targets.slice(i, i + UPDATE_CHUNK_SIZE);
+    try {
+      const batch = db.batch();
+      for (const event of chunk) {
+        batch.update(db.collection(EVENTS_COLLECTION).doc(event.id), {
+          portalEnabled,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      result.updatedEventIds.push(...chunk.map((event) => event.id));
+    } catch {
+      for (const event of chunk) {
+        try {
+          await updateEvent(event.id, { portalEnabled });
+          result.updatedEventIds.push(event.id);
+        } catch (error) {
+          result.failed.push({
+            eventId: event.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+  }
+  return result;
+}
+
 export type UpdateEventInput = Partial<
   Pick<
     EventConfig,
@@ -386,6 +432,7 @@ export type UpdateEventInput = Partial<
     | 'subscriberCap'
     | 'defaultLocale'
     | 'admissionQrEnabled'
+    | 'portalEnabled'
     | 'stampGoalCount'
     | 'stampRewardType'
     | 'stampBenefitText'

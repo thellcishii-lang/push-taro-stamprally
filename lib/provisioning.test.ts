@@ -168,6 +168,21 @@ describe('buildProvisioningUpdate', () => {
     it('adsOptionEnabled が送られなければ含めない（既存値を変えない）', () => {
       expect(buildProvisioningUpdate({ companyName: '' })).toEqual({});
     });
+    it('portalEnabled は boolean が送られた場合だけ含め、それ以外は無視する', () => {
+      expect(buildProvisioningUpdate({ companyName: '', portalEnabled: true })).toEqual({
+        portalEnabled: true,
+      });
+      expect(buildProvisioningUpdate({ companyName: '', portalEnabled: false })).toEqual({
+        portalEnabled: false,
+      });
+      expect(
+        buildProvisioningUpdate({
+          companyName: '',
+          portalEnabled: 'true' as unknown as boolean,
+        }),
+      ).toEqual({});
+      expect(buildProvisioningUpdate({ companyName: '' })).toEqual({});
+    });
     it('worldName は前後の空白を除いて含める', () => {
       expect(buildProvisioningUpdate({ companyName: '', worldName: ' 飯能カレー ' })).toEqual({
         worldName: '飯能カレー',

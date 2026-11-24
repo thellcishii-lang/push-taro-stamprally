@@ -79,6 +79,8 @@ export async function POST(request: Request) {
       typeof body.billingOptionEnabled === 'boolean' ? body.billingOptionEnabled : undefined,
     adsOptionEnabled:
       typeof body.adsOptionEnabled === 'boolean' ? body.adsOptionEnabled : undefined,
+    portalEnabled:
+      typeof body.portalEnabled === 'boolean' ? body.portalEnabled : undefined,
     worldName: typeof body.worldName === 'string' ? body.worldName : undefined,
     agencyCode: typeof body.agencyCode === 'string' ? body.agencyCode : null,
   });

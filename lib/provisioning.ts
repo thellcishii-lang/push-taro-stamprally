@@ -11,7 +11,10 @@
 //   引き直して続きを完了させる。
 // - パスワードは Auth に渡すだけで、ログ・レコードのどこにも残さない。
 import { authAdmin } from './firebase-admin';
-import { propagateCapsToOwnerEvents } from './event-store';
+import {
+  propagateCapsToOwnerEvents,
+  propagatePortalEnabledToOwnerEvents,
+} from './event-store';
 import { applyProvisionedSmsBalance, sanitizeSmsBalance } from './sms-mirror';
 import {
   applyProvisioningUpdate,
@@ -56,6 +59,14 @@ export interface ProvisionOrganizerInput {
    * boolean 以外は無視する。
    */
   adsOptionEnabled?: boolean;
+  /**
+   * ポータル（特設サイト本契約）の ON/OFF。任意項目:
+   * boolean が送られた場合だけ反映し、送られなければ既存値を変えない。
+   * 契約レコードへ保存し、イベント側の portalEnabled へも伝播する
+   * （クーポン・特典の管理場所の切り替えに使う）。
+   * boolean 以外は無視する。
+   */
+  portalEnabled?: boolean;
   /**
    * 世界観の名前（申込時の希望名、例: 飯能カレー）。任意項目:
    * 送られなければ既存値を変えない。空文字・上限超は無視する
@@ -159,6 +170,7 @@ export function buildProvisioningUpdate(
     | 'restoredSubscriberCap'
     | 'billingOptionEnabled'
     | 'adsOptionEnabled'
+    | 'portalEnabled'
     | 'worldName'
     | 'smsAuthEnabled'
   >,
@@ -186,6 +198,10 @@ export function buildProvisioningUpdate(
   // 広告オプションも boolean が送られた場合だけ反映する。
   if (typeof input.adsOptionEnabled === 'boolean') {
     patch.adsOptionEnabled = input.adsOptionEnabled;
+  }
+  // ポータルも boolean が送られた場合だけ反映する。
+  if (typeof input.portalEnabled === 'boolean') {
+    patch.portalEnabled = input.portalEnabled;
   }
   const worldName = sanitizeWorldName(input.worldName);
   if (worldName !== undefined) patch.worldName = worldName;
@@ -288,6 +304,35 @@ export async function provisionOrganizer(
         }).catch(() => undefined);
       }
     }
+    // ポータルの ON/OFF が変わったら、終わっていないイベントへも伝播
+    // させる（クーポン・特典の管理場所が切り替わる）。枠の伝播と同じく、
+    // 失敗しても更新自体は失敗にしない。
+    if (patch.portalEnabled !== undefined) {
+      try {
+        const propagation = await propagatePortalEnabledToOwnerEvents(
+          existing!.ownerUid!,
+          patch.portalEnabled,
+        );
+        if (propagation.failed.length > 0) {
+          await logProvisioning({
+            contractId: input.contractId,
+            email: existing!.email,
+            result: 'updated',
+            error: `portal-propagation-failed: ${propagation.failed
+              .map((f) => f.eventId)
+              .join(',')}`,
+          });
+        }
+      } catch (error) {
+        console.error('[provisioning] ポータルの伝播に失敗:', error);
+        await logProvisioning({
+          contractId: input.contractId,
+          email: existing!.email,
+          result: 'updated',
+          error: 'portal-propagation-error',
+        }).catch(() => undefined);
+      }
+    }
     await logProvisioning({
       contractId: input.contractId,
       email: existing!.email,
@@ -332,6 +377,8 @@ export async function provisionOrganizer(
     billingOptionEnabled: input.billingOptionEnabled === true,
     // 広告オプションも boolean のときだけ有効として保存（それ以外は無効）。
     adsOptionEnabled: input.adsOptionEnabled === true,
+    // ポータルは boolean のときだけ有効として保存（それ以外はアプリ単独）。
+    portalEnabled: input.portalEnabled === true,
     // 世界観の名前は無害化した値だけを保持する。
     worldName: sanitizeWorldName(input.worldName) ?? '',
     // SMS認証は boolean のときだけ有効として保存（それ以外は端末認証）。
