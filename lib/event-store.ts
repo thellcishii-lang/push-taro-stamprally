@@ -57,6 +57,7 @@ import {
   parseCouponIssuePrice,
   parseLoginBonusDays,
   parseLoginBonusEnabled,
+  parsePortalEnabled,
   parsePushPrice,
   parseShopMonthlyPrice,
 } from './event';
@@ -90,6 +91,8 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     defaultLocale: normalizeLocale(data.defaultLocale),
     // 入場用QRは既定オフ。導入前に作られたイベントには項目自体が無い
     admissionQrEnabled: data.admissionQrEnabled === true,
+    // ポータル（特設サイト本契約）も既定オフ（アプリ単独）に倒す
+    portalEnabled: parsePortalEnabled(data.portalEnabled),
     // スタンプ達成個数も導入前のイベントには項目が無いため既定値に倒す
     stampGoalCount: parseStampGoalCount(data.stampGoalCount),
     // 達成特典の種類・内容も同様に既定値（従来の「1軒無料」・空）に倒す
@@ -196,6 +199,8 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     subscriberCap: input.subscriberCap ?? DEFAULT_SUBSCRIBER_CAP,
     defaultLocale: input.defaultLocale ?? DEFAULT_LOCALE,
     admissionQrEnabled: input.admissionQrEnabled ?? false,
+    // ポータルは本家接続のプロビジョニングが立てる。作成時はアプリ単独
+    portalEnabled: false,
     stampGoalCount: input.stampGoalCount ?? DEFAULT_STAMP_GOAL_COUNT,
     stampRewardType,
     stampBenefitText,

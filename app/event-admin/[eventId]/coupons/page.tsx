@@ -153,6 +153,9 @@ export default function EventCouponAdminPage() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [couponCap, setCouponCap] = useState(100);
   const [eventName, setEventName] = useState('');
+  // ポータル（特設サイト本契約）が有効なら管理場所はポータル側。
+  // ナビの現在地（③P / ③）の切り替えに使う。
+  const [portalEnabled, setPortalEnabled] = useState(false);
   const [exhibitorName, setExhibitorName] = useState('');
   const [exhibitorEmail, setExhibitorEmail] = useState('');
   const [exhibitorAddress, setExhibitorAddress] = useState('');
@@ -232,6 +235,7 @@ export default function EventCouponAdminPage() {
       setCoupons(cpData.coupons ?? []);
       if (typeof evData.event?.couponCap === 'number') setCouponCap(evData.event.couponCap);
       if (typeof evData.event?.name === 'string') setEventName(evData.event.name);
+      setPortalEnabled(evData.event?.portalEnabled === true);
       setLoadMessage('');
     } catch (e) {
       setLoadMessage(e instanceof Error ? e.message : adminText(locale, 'loadFailed'));
@@ -485,7 +489,7 @@ export default function EventCouponAdminPage() {
       email={user.email}
       onLogout={() => void signOut(auth)}
       languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
-      nav={<AdminNav eventId={eventId} eventName={eventName} current="③" locale={locale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current={portalEnabled ? '③P' : '③'} locale={locale} />}
     >
       <h1 style={adminPageTitleStyle}>{adminText(locale, 'couponsPageTitle')}</h1>
       <CapWarningBanner locale={locale} />
