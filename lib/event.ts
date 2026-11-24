@@ -62,6 +62,17 @@ export interface EventConfig {
    */
   admissionQrEnabled: boolean;
   /**
+   * ポータル（特設サイト本契約）が有効かどうか。
+   * スタンプラリーはポータル主体の製品で、クーポンと特典の管理場所は
+   * 常に1か所に寄せる: ポータル有効時はポータル側で管理し、アプリ側の
+   * クーポン・特典はグレーアウトする。ポータル無効（アプリ単独）時は
+   * アプリのコンソールで管理し、簡易特設ページが立ち上がる。
+   * 本家接続のプロビジョニングが立てる項目で、主催者画面からは変更
+   * しない。導入前に作られたプロジェクトには項目自体が無いため、
+   * 読み取り時はオフ（アプリ単独）に倒す。
+   */
+  portalEnabled: boolean;
+  /**
    * スタンプラリーの達成個数（1〜MAX_STAMP_SLOTS）。主催者がプロジェクト
    * ごとに設定する。1つの周（ラリー1周）で異なる参加店のスタンプを
    * この個数集めると「好きな店で1回無料」クーポンが発行される。
@@ -271,10 +282,10 @@ export const DEFAULT_SUBSCRIBER_CAP = 50_000;
 export const MAX_COUPONS_PER_EVENT = 100;
 /**
  * 1主催者が同時に仕込めるプロジェクト数の上限（下書き＋開催中）。
- * 会場日程が重なる運用（例: 月-水／水-金／週末）を想定した製品ルール。
- * 終了したプロジェクトは数えない。
+ * スタンプラリーはポータル主体の製品で、ポータルが1つだからラリーも
+ * 1つしか作らない（2026-11-24 決定）。終了したプロジェクトは数えない。
  */
-export const MAX_CONCURRENT_EVENTS = 3;
+export const MAX_CONCURRENT_EVENTS = 1;
 export const MAX_INFO_PDFS = 5;
 export const MAX_EVENT_LINKS = 3;
 export const DEFAULT_RESET_TIME = '00:00';
@@ -623,6 +634,11 @@ export function normalizeTopPlacementPrice(input: unknown): number | null {
 
 /** 保存済みのトップ掲載 ON/OFF を防御的に読む（読み取り用）。true のみ有効。 */
 export function parseTopPlacementEnabled(value: unknown): boolean {
+  return value === true;
+}
+
+/** ポータル（特設サイト本契約）の有効フラグ。true のときだけ有効に倒す。 */
+export function parsePortalEnabled(value: unknown): boolean {
   return value === true;
 }
 

@@ -18,6 +18,7 @@ function eventWith(status: EventConfig['status']): EventConfig {
     subscriberCap: 50000,
     defaultLocale: 'ja',
     admissionQrEnabled: false,
+    portalEnabled: false,
     stampGoalCount: 5,
     stampRewardType: 'free-dish',
     stampBenefitText: '',

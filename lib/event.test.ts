@@ -136,8 +136,8 @@ describe('isFinalizationDue', () => {
 describe('同時イベント上限（MAX_CONCURRENT_EVENTS）', () => {
   const ev = (status: EventConfig['status']) => ({ status });
 
-  it('上限は3', () => {
-    expect(MAX_CONCURRENT_EVENTS).toBe(3);
+  it('上限は1（ポータルが1つだからラリーも1つ）', () => {
+    expect(MAX_CONCURRENT_EVENTS).toBe(1);
   });
 
   it('終了したイベントは数えない', () => {
@@ -153,18 +153,15 @@ describe('同時イベント上限（MAX_CONCURRENT_EVENTS）', () => {
     expect(canCreateAnotherEvent([])).toBe(true);
   });
 
-  it('下書き＋開催中が上限未満なら作成できる（終了分は含めない）', () => {
-    expect(
-      canCreateAnotherEvent([ev('draft'), ev('live'), ev('ended'), ev('ended')]),
-    ).toBe(true);
+  it('終了分だけなら作成できる（終了分は含めない）', () => {
+    expect(canCreateAnotherEvent([ev('ended'), ev('ended')])).toBe(true);
   });
 
-  it('下書き＋開催中が上限に達したら作成できない', () => {
-    expect(canCreateAnotherEvent([ev('draft'), ev('live'), ev('draft')])).toBe(
-      false,
-    );
+  it('下書きか開催中が1つでもあれば作成できない（上限1）', () => {
+    expect(canCreateAnotherEvent([ev('draft')])).toBe(false);
+    expect(canCreateAnotherEvent([ev('live'), ev('ended')])).toBe(false);
     expect(
-      canCreateAnotherEvent([ev('live'), ev('live'), ev('live'), ev('ended')]),
+      canCreateAnotherEvent([ev('draft'), ev('live'), ev('ended')]),
     ).toBe(false);
   });
 });

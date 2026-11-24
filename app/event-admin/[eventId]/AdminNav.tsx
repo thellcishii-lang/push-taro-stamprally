@@ -7,15 +7,20 @@
 // 白カードの中にアイコン付きメニューを縦に並べる。
 // 現在地はどちらもバイオレットの塗りつぶしで示す（承認済みモック準拠）。
 // 構造: プロジェクト内の画面では、先頭に「プロジェクト一覧」への戻りリンク、
-// その下にプロジェクト名（見出し）、続いてプロジェクトメニュー
-// （ダッシュボード → プッシュ＋消込 → 予約配信 → クーポン管理 → レビュー管理
-// → 投稿 → 設定 → 課金 → 特設サイト編集 → 特設サイト（外部））を並べ、
-// 今どのプロジェクトの中にいるかがサイドバーで分かるようにする。
+// その下にプロジェクト名（見出し）、続いてダッシュボード、その下に
+// 「ポータル」と「アプリ」の2グループを並べる（スタンプラリーは
+// ポータル主体の製品で、コンソールは1つに寄せる）。
+// クーポン・特典の管理場所は常に1か所: ポータル（特設サイト本契約）が
+// 有効な間はポータル側で管理し、アプリ側の項目はグレーアウトして
+// 「管理はポータル側」と出す。ポータルが無い（アプリ単独）間は逆になる。
+// ポータルの有効状態はこのコンポーネントがイベント取得 API から読む。
 // プロジェクトのダッシュボード（/event-admin/[eventId]）を開いた時点で
 // サイドバーがこのプロジェクトメニューに切り替わる。
 // eventId が無い場合（主催者トップ）はプロジェクト設定のみを現在地として出す。
 // 上限警告バナー（CapWarningBanner）は各画面のコンテンツ側で描画する。
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/lib/firebase-client';
 import { adminText } from '@/lib/ui-text';
 import type { Locale } from '@/lib/i18n';
 import { specialSiteUrl } from '@/lib/special-site';
@@ -207,6 +212,29 @@ const projectNameStyle: React.CSSProperties = {
   color: '#2E2015',
 };
 
+const headingStyle: React.CSSProperties = {
+  padding: '14px 14px 2px',
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: '0.08em',
+  color: '#8A7A63',
+};
+
+const itemDisabledStyle: React.CSSProperties = {
+  ...itemBaseStyle,
+  color: '#94a3b8',
+  opacity: 0.55,
+  cursor: 'default',
+};
+
+const itemNoteStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: 11.5,
+  fontWeight: 600,
+  color: '#94a3b8',
+  marginTop: 2,
+};
+
 export function AdminNav({
   eventId,
   eventName,
@@ -222,43 +250,104 @@ export function AdminNav({
   /** サイドバー内ではカード枠なしにする（AdminShell が指定）。 */
   plain?: boolean;
 }) {
-  const items: Array<{
+  // ポータル（特設サイト本契約）の有効状態。クーポン・特典の管理場所の
+  // 切り替え（グレーアウト）に使う。読み取り前・失敗時はアプリ側管理
+  // （ポータル無効）に倒す。
+  const [portalEnabled, setPortalEnabled] = useState(false);
+  useEffect(() => {
+    if (!eventId) return;
+    let cancelled = false;
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (!u) return;
+      void (async () => {
+        try {
+          const idToken = await u.getIdToken();
+          const res = await fetch(`/api/events/${eventId}`, {
+            headers: { Authorization: `Bearer ${idToken}` },
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!cancelled && data?.event?.portalEnabled === true) {
+            setPortalEnabled(true);
+          }
+        } catch {
+          // 既定（アプリ側管理）のまま
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [eventId]);
+
+  type NavItem = {
+    type: 'item';
     key: string;
     href: string;
     label: string;
     icon: ReactNode;
     external?: boolean;
-  }> = eventId
+    disabled?: boolean;
+    note?: string;
+  };
+  type NavEntry = NavItem | { type: 'heading'; key: string; label: string };
+
+  const couponsHref = `/event-admin/${eventId}/coupons`;
+  const entries: NavEntry[] = eventId
     ? [
-        { key: 'ダッシュボード', href: `/event-admin/${eventId}`, label: adminText(locale, 'navDashboard'), icon: dashboardIcon },
-        { key: '①', href: `/event-admin/${eventId}/push`, label: adminText(locale, 'navPush'), icon: pushIcon },
-        { key: '②', href: `/event-admin/${eventId}/schedule`, label: adminText(locale, 'navSchedule'), icon: scheduleIcon },
-        { key: '③', href: `/event-admin/${eventId}/coupons`, label: adminText(locale, 'navCoupons'), icon: couponsIcon },
-        { key: '④', href: `/event-admin/${eventId}/reviews`, label: adminText(locale, 'navReviews'), icon: reviewsIcon },
-        { key: '⑤', href: `/event-admin/${eventId}/social`, label: adminText(locale, 'navSocial'), icon: socialIcon },
-        { key: '⑥', href: `/event-admin/${eventId}/settings`, label: adminText(locale, 'navConfig'), icon: gearIcon },
-        // 課金は別料金オプション。ナビは常時出し、オプション OFF の
-        // 契約では課金ページ側で案内文を出す（API が 404 を返す）。
-        { key: '⑦', href: `/event-admin/${eventId}/billing`, label: adminText(locale, 'navBilling'), icon: billingIcon },
+        { type: 'item', key: 'ダッシュボード', href: `/event-admin/${eventId}`, label: adminText(locale, 'navDashboard'), icon: dashboardIcon },
+        { type: 'heading', key: '見出しポータル', label: adminText(locale, 'navPortalGroup') },
         // 特設サイト編集は公開ページの表示内容（紹介文・ヒーロー画像・
         // 追加事項）を編集する画面。下の外部リンク（公開ページそのもの）
         // とは別物なので、並べて置く。
-        { key: '⑧', href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit'), icon: siteEditIcon },
-        { key: '⑨', href: `/event-admin/${eventId}/ads`, label: adminText(locale, 'navAds'), icon: adsIcon },
-        { key: '⑩', href: `/event-admin/${eventId}/push-requests`, label: adminText(locale, 'navPushRequests'), icon: pushIcon },
-        { key: '⑪', href: `/event-admin/${eventId}/report`, label: adminText(locale, 'navActionReport'), icon: reportIcon },
-        // 特設サイトは本家（push-taro.com）上の公開ページ。宣伝に使う
-        // URL へすぐ飛べるよう、末尾に外部リンクとして置く。
+        { type: 'item', key: '⑧', href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit'), icon: siteEditIcon },
+        // クーポン・特典の管理はポータル有効時はポータル側。アプリ側の
+        // 項目（下）はグレーアウトする。
         {
+          type: 'item',
+          key: '③P',
+          href: couponsHref,
+          label: adminText(locale, 'navCouponsBenefits'),
+          icon: couponsIcon,
+          disabled: !portalEnabled,
+          note: !portalEnabled ? adminText(locale, 'couponsManagedOnApp') : undefined,
+        },
+        { type: 'item', key: '④', href: `/event-admin/${eventId}/reviews`, label: adminText(locale, 'navReviews'), icon: reviewsIcon },
+        { type: 'item', key: '⑨', href: `/event-admin/${eventId}/ads`, label: adminText(locale, 'navAds'), icon: adsIcon },
+        { type: 'item', key: '⑤', href: `/event-admin/${eventId}/social`, label: adminText(locale, 'navSocial'), icon: socialIcon },
+        { type: 'item', key: '⑪', href: `/event-admin/${eventId}/report`, label: adminText(locale, 'navActionReport'), icon: reportIcon },
+        // 特設サイトは本家（push-taro.com）上の公開ページ。宣伝に使う
+        // URL へすぐ飛べるよう、ポータル末尾に外部リンクとして置く。
+        {
+          type: 'item',
           key: '特設',
           href: specialSiteUrl(eventId),
           label: adminText(locale, 'navSpecialSite'),
           icon: externalIcon,
           external: true,
         },
+        { type: 'heading', key: '見出しアプリ', label: adminText(locale, 'navAppGroup') },
+        { type: 'item', key: '①', href: `/event-admin/${eventId}/push`, label: adminText(locale, 'navPush'), icon: pushIcon },
+        { type: 'item', key: '②', href: `/event-admin/${eventId}/schedule`, label: adminText(locale, 'navSchedule'), icon: scheduleIcon },
+        // ポータル有効時はアプリ側のクーポン・特典はグレーアウトし、
+        // 管理がポータル側であることを出す。
+        {
+          type: 'item',
+          key: '③',
+          href: couponsHref,
+          label: adminText(locale, 'navCouponsBenefits'),
+          icon: couponsIcon,
+          disabled: portalEnabled,
+          note: portalEnabled ? adminText(locale, 'couponsManagedOnPortal') : undefined,
+        },
+        { type: 'item', key: '⑩', href: `/event-admin/${eventId}/push-requests`, label: adminText(locale, 'navPushRequests'), icon: pushIcon },
+        // 課金は別料金オプション。ナビは常時出し、オプション OFF の
+        // 契約では課金ページ側で案内文を出す（API が 404 を返す）。
+        { type: 'item', key: '⑦', href: `/event-admin/${eventId}/billing`, label: adminText(locale, 'navBilling'), icon: billingIcon },
+        { type: 'item', key: '⑥', href: `/event-admin/${eventId}/settings`, label: adminText(locale, 'navConfig'), icon: gearIcon },
       ]
     : [
-        { key: '設定', href: '/event-admin', label: adminText(locale, 'navSettings'), icon: settingsIcon },
+        { type: 'item', key: '設定', href: '/event-admin', label: adminText(locale, 'navSettings'), icon: settingsIcon },
       ];
   return (
     <nav style={plain ? plainNavStyle : cardNavStyle}>
@@ -275,15 +364,34 @@ export function AdminNav({
           )}
         </>
       )}
-      {items.map((item) =>
-        item.key === current ? (
-          <span key={item.href} style={itemCurrentStyle} aria-current="page">
+      {entries.map((entry) => {
+        if (entry.type === 'heading') {
+          return (
+            <div key={entry.key} style={headingStyle}>
+              {entry.label}
+            </div>
+          );
+        }
+        const item = entry;
+        if (item.disabled) {
+          return (
+            <span key={item.key} style={itemDisabledStyle} aria-disabled="true">
+              <span style={{ display: 'flex', color: '#94a3b8' }}>{item.icon}</span>
+              <span>
+                {item.label}
+                {item.note && <span style={itemNoteStyle}>{item.note}</span>}
+              </span>
+            </span>
+          );
+        }
+        return item.key === current ? (
+          <span key={item.key} style={itemCurrentStyle} aria-current="page">
             <span style={{ display: 'flex', color: '#ffffff' }}>{item.icon}</span>
             {item.label}
           </span>
         ) : (
           <a
-            key={item.href}
+            key={item.key}
             href={item.href}
             style={itemLinkStyle}
             {...(item.external ? { target: '_blank', rel: 'noreferrer' } : {})}
@@ -296,8 +404,8 @@ export function AdminNav({
               </span>
             )}
           </a>
-        ),
-      )}
+        );
+      })}
     </nav>
   );
 }

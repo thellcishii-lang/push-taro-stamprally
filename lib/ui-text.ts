@@ -2189,6 +2189,36 @@ export const ADMIN_TEXT = {
     zh: '⑪ 行动报告',
     ko: '⑪ 행동 리포트',
   },
+  navPortalGroup: {
+    ja: 'ポータル',
+    en: 'Portal',
+    zh: '门户',
+    ko: '포털',
+  },
+  navAppGroup: {
+    ja: 'アプリ',
+    en: 'App',
+    zh: '应用',
+    ko: '앱',
+  },
+  navCouponsBenefits: {
+    ja: 'クーポン・特典',
+    en: 'Coupons & benefits',
+    zh: '优惠券与特典',
+    ko: '쿠폰·특전',
+  },
+  couponsManagedOnPortal: {
+    ja: 'クーポンと特典の管理はポータル側です',
+    en: 'Coupons and benefits are managed on the portal side',
+    zh: '优惠券与特典在门户侧管理',
+    ko: '쿠폰과 특전 관리는 포털 측에서 합니다',
+  },
+  couponsManagedOnApp: {
+    ja: 'クーポンと特典の管理はアプリ側です',
+    en: 'Coupons and benefits are managed on the app side',
+    zh: '优惠券与特典在应用侧管理',
+    ko: '쿠폰과 특전 관리는 앱 측에서 합니다',
+  },
   navSpecialSite: {
     ja: '特設サイト',
     en: 'Special site',
