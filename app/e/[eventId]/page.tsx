@@ -61,6 +61,7 @@ import {
 } from '@/lib/stamp-qr';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { haversineMeters, isWithinGpsArea } from '@/lib/geo';
 
 interface PublicEventLink {
   title: string;
@@ -902,6 +903,9 @@ export default function EventVisitorPage() {
   const [stampCard, setStampCard] = useState<MemberStampCard | null>(null);
   // 場所QR の付与結果フィードバック（スタンプカードの近くに出す）
   const [stampFeedback, setStampFeedback] = useState<{ text: string; error: boolean } | null>(null);
+  // GPSエリアチェックで範囲外・取得不可だったときの再試行対象
+  // （'placed' = 置きQR / 'rotating' = 回転QR）
+  const [stampScanRetry, setStampScanRetry] = useState<'placed' | 'rotating' | null>(null);
   // 場所QRの二重処理防止（同じコードは1回だけ API に送る）
   const placedStampBusyRef = useRef(false);
   // ログインボーナスの状態（未登録・未取得なら null）
@@ -950,14 +954,22 @@ export default function EventVisitorPage() {
   // 場所QRの着地: ?stamp={stampCode} を検出したら sessionStorage に保持し、
   // URL からは取り除く（再読込・共有で再処理しない）。実際の付与は登録が
   // 完了して利用画面（'done'）に入ったタイミングで行うため、未登録でも
-  // 登録フロー後にそのままスタンプが付く。
+  // 登録フロー後にそのままスタンプが付く。回転QR（?rstamp={code}）も
+  // 同じ作法で保持する。
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const code = params.get('stamp');
-      if (!code) return;
-      window.sessionStorage.setItem(`pending-stamp:${eventId}`, code);
-      params.delete('stamp');
+      const rotatingCode = params.get('rstamp');
+      if (!code && !rotatingCode) return;
+      if (code) {
+        window.sessionStorage.setItem(`pending-stamp:${eventId}`, code);
+        params.delete('stamp');
+      }
+      if (rotatingCode) {
+        window.sessionStorage.setItem(`pending-rstamp:${eventId}`, rotatingCode);
+        params.delete('rstamp');
+      }
       const query = params.toString();
       window.history.replaceState(
         null,
@@ -1301,41 +1313,193 @@ export default function EventVisitorPage() {
     }
   };
 
-  // 場所QRで保持したスタンプコードの付与。登録済み（利用画面）になって
-  // 初めて呼ぶ。成否にかかわらずコードは消費し、同じ QR で繰り返し
-  // 処理しない（通信自体が失敗したときだけ保持して次回に回す）。
-  const processPendingPlacedStamp = async (currentUser: User) => {
+  // GPSエリアチェック用の端末内測位。数秒間測って最も精度の良い位置を
+  // 取り、対象座標から範囲内（50m）かどうかを端末内だけで判定する。
+  // 座標そのものはサーバーに送らない（送るのは「範囲内」の申告だけ）。
+  const measureWithinRange = (
+    target: { lat: number; lng: number },
+  ): Promise<'within' | 'outside' | 'unavailable'> => {
+    return new Promise((resolve) => {
+      if (!('geolocation' in navigator)) {
+        resolve('unavailable');
+        return;
+      }
+      let best: GeolocationPosition | null = null;
+      let settled = false;
+      let watchId = 0;
+      const finish = (result: 'within' | 'outside' | 'unavailable') => {
+        if (settled) return;
+        settled = true;
+        navigator.geolocation.clearWatch(watchId);
+        resolve(result);
+      };
+      const judge = () => {
+        if (!best) return;
+        const distance = haversineMeters(
+          { lat: best.coords.latitude, lng: best.coords.longitude },
+          target,
+        );
+        finish(isWithinGpsArea(distance) ? 'within' : 'outside');
+      };
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          if (!best || position.coords.accuracy < best.coords.accuracy) {
+            best = position;
+          }
+          // 十分に精度が良ければ、制限時間を待たずに判定する
+          if (position.coords.accuracy <= 25) judge();
+        },
+        (error) => {
+          if (error.code === error.PERMISSION_DENIED) {
+            finish('unavailable');
+          }
+          // 一時的な取得失敗は制限時間まで待ち続ける
+        },
+        { enableHighAccuracy: true, maximumAge: 0 },
+      );
+      window.setTimeout(() => {
+        if (best) judge();
+        else finish('unavailable');
+      }, 5000);
+    });
+  };
+
+  // お客さんが読む方式（置きQR・回転QR）で保持したコードの付与。
+  // 登録済み（利用画面）になって初めて呼ぶ。GPSエリアチェックが有効な
+  // チェックポイントでは、先に事前情報で要否を確認し、端末内で測位して
+  // 「範囲内」の申告を付けて送る。範囲外・取得不可のときはコードを
+  // 保持したまま再試行できるようにする。それ以外は成否にかかわらず
+  // コードを消費する（通信自体が失敗したときだけ保持して次回に回す）。
+  const processPendingScan = async (currentUser: User) => {
     if (placedStampBusyRef.current) return;
-    let code: string | null = null;
+    let placedCode: string | null = null;
+    let rotatingToken: string | null = null;
     try {
-      code = window.sessionStorage.getItem(`pending-stamp:${eventId}`);
+      placedCode = window.sessionStorage.getItem(`pending-stamp:${eventId}`);
+      rotatingToken = window.sessionStorage.getItem(`pending-rstamp:${eventId}`);
     } catch {
       // 読めなければ何もしない
     }
-    if (!code) return;
+    if (!placedCode && !rotatingToken) return;
+    const kind: 'placed' | 'rotating' = placedCode ? 'placed' : 'rotating';
+    const storageKey = placedCode
+      ? `pending-stamp:${eventId}`
+      : `pending-rstamp:${eventId}`;
+    const credential = (placedCode ?? rotatingToken) as string;
     placedStampBusyRef.current = true;
+    setStampScanRetry(null);
     setStampFeedback({ text: uiText(locale, 'stampQrProcessing'), error: false });
     try {
       const idToken = await currentUser.getIdToken();
-      const res = await fetch(`/api/events/${eventId}/stamps/placed-qr`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      };
+      // 事前情報: GPSエリアチェックの要否と、端末内判定に使う座標。
+      // 回転QRではコードの有効性もここで確認する（期限切れは付与に
+      // 進まず、コードを消費してエラーを出す）。
+      let scanInfo: {
+        gpsCheck?: unknown;
+        location?: { lat: number; lng: number } | null;
+      } | null = null;      try {
+        const infoRes =
+          kind === 'placed'
+            ? await fetch(
+                `/api/events/${eventId}/stamps/placed-qr?code=${encodeURIComponent(credential)}`,
+                { headers: { Authorization: `Bearer ${idToken}` } },
+              )
+            : await fetch(`/api/events/${eventId}/stamps/rotating/info`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ token: credential }),
+              });
+        const infoData = await infoRes.json().catch(() => ({}));
+        if (infoRes.ok) {
+          scanInfo =
+            (infoData.info as
+              | {
+                  gpsCheck?: unknown;
+                  location?: { lat: number; lng: number } | null;
+                }
+              | undefined) ?? null;
+        } else if (kind === 'rotating') {
+          try {
+            window.sessionStorage.removeItem(storageKey);
+          } catch {
+            // 消せなくても処理はここで終える
+          }
+          setStampFeedback({
+            text: infoData.error ?? uiText(locale, 'registerRetry'),
+            error: true,
+          });
+          return;
+        }
+      } catch {
+        // 事前情報が取れなくても付与は試す（チェック必須の場合は
+        // サーバー側で拒否される）
+      }
+      let withinRange = false;
+      if (scanInfo?.gpsCheck === true && scanInfo.location) {
+        setStampFeedback({
+          text: uiText(locale, 'stampGpsMeasuring'),
+          error: false,
+        });
+        const measured = await measureWithinRange(scanInfo.location);
+        if (measured === 'outside') {
+          setStampFeedback({
+            text: uiText(locale, 'stampGpsOutOfRange'),
+            error: true,
+          });
+          setStampScanRetry(kind);
+          return;
+        }
+        if (measured === 'unavailable') {
+          setStampFeedback({
+            text: uiText(locale, 'stampGpsUnavailable'),
+            error: true,
+          });
+          setStampScanRetry(kind);
+          return;
+        }
+        withinRange = true;
+      }
+      const res = await fetch(
+        kind === 'placed'
+          ? `/api/events/${eventId}/stamps/placed-qr`
+          : `/api/events/${eventId}/stamps/rotating`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(
+            kind === 'placed'
+              ? { stampCode: credential, withinRange }
+              : { token: credential, withinRange },
+          ),
         },
-        body: JSON.stringify({ stampCode: code }),
-      });
+      );
       const data = await res.json().catch(() => ({}));
       try {
-        window.sessionStorage.removeItem(`pending-stamp:${eventId}`);
+        window.sessionStorage.removeItem(storageKey);
       } catch {
         // 消せなくても二重処理は ref で防いでいる
       }
       if (!res.ok) {
-        setStampFeedback({
-          text: data.error ?? uiText(locale, 'registerRetry'),
-          error: true,
-        });
+        if (data.code === 'too-fast') {
+          setStampFeedback({
+            text: uiText(locale, 'stampTooFast'),
+            error: true,
+          });
+        } else if (data.code === 'gps-check-failed') {
+          setStampFeedback({
+            text: uiText(locale, 'stampGpsOutOfRange'),
+            error: true,
+          });
+        } else {
+          setStampFeedback({
+            text: data.error ?? uiText(locale, 'registerRetry'),
+            error: true,
+          });
+        }
         return;
       }
       setStampFeedback({
@@ -1352,11 +1516,11 @@ export default function EventVisitorPage() {
     }
   };
 
-  // 利用画面に入ったら、保持中の場所QRスタンプを処理する
+  // 利用画面に入ったら、保持中のお客さん読み取りスタンプを処理する
   useEffect(() => {
     if (phase !== 'done' || !user) return;
-    void processPendingPlacedStamp(user);
-    // processPendingPlacedStamp は表示言語時点の文言を使う（依存に
+    void processPendingScan(user);
+    // processPendingScan は表示言語時点の文言を使う（依存に
     // locale を入れると言語切替のたびに走るため意図的に外す）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, user, eventId]);
@@ -2661,6 +2825,26 @@ export default function EventVisitorPage() {
                 >
                   {stampFeedback.text}
                 </p>
+              )}
+
+              {stampScanRetry && user && (
+                <button
+                  type="button"
+                  onClick={() => void processPendingScan(user)}
+                  style={{
+                    marginTop: 10,
+                    padding: '10px 20px',
+                    borderRadius: 999,
+                    border: `1.5px solid ${VIOLET}`,
+                    backgroundColor: '#ffffff',
+                    color: VIOLET,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {uiText(locale, 'stampGpsRetry')}
+                </button>
               )}
 
               {stampCard.freeCoupons.map((freeCoupon) =>

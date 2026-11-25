@@ -9,15 +9,24 @@ import {
   buildStampRewardSnapshot,
   evaluateSequentialStamp,
   evaluateStampCancel,
+  evaluateStampVelocity,
+  getPlacedQrCheckpointInfo,
+  getRotatingCheckpointInfo,
   getStampCard,
+  grantedAtMillis,
   grantStamp,
   grantStampByPlacedQr,
+  grantStampByRotatingQr,
   isRoundCompleted,
   parseStampMethod,
   redeemFreeCoupon,
   resolveCurrentRound,
   stampIdFor,
 } from './event-stamp';
+import {
+  buildRotatingCode,
+  rotatingWindowIndex,
+} from './stamp-rotating';
 
 const storeMocks = vi.hoisted(() => ({ getEvent: vi.fn() }));
 vi.mock('./event-store', () => ({ getEvent: storeMocks.getEvent }));
@@ -761,5 +770,521 @@ describe('grantStamp: 途中の特典（マイルストーン）', () => {
     ]);
     expect(card?.freeCoupons).toHaveLength(1);
     expect(card?.freeCoupons[0].milestoneCount).toBe(2);
+  });
+});
+
+describe('parseStampMethod（回転QRの追加）', () => {
+  it('rotating はそのまま読む', () => {
+    expect(parseStampMethod('rotating')).toBe('rotating');
+  });
+});
+
+describe('grantStamp: 回転QRの方法実施', () => {
+  it('rotating が無効なチェックポイントでは回転QRを拒否する（403）', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    const result = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: fakeExhibitor({ stampMethods: ['staff', 'placed'] }),
+      memberId: 'member-a',
+      method: 'rotating',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(403);
+  });
+
+  it('rotating が有効なら押せる', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    const result = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: fakeExhibitor({ stampMethods: ['rotating'] }),
+      memberId: 'member-a',
+      method: 'rotating',
+    });
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('grantStamp: GPSエリアチェックの実施', () => {
+  it('gpsCheck が有効な置きQRで、範囲内の申告が無ければ拒否する（403・コードつき）', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    const result = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: fakeExhibitor({
+        stampMethods: ['placed'],
+        gpsCheck: true,
+      }),
+      memberId: 'member-a',
+      method: 'placed-qr',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(403);
+      expect(result.code).toBe('gps-check-failed');
+    }
+  });
+
+  it('範囲内の申告があれば押せる', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    const result = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: fakeExhibitor({
+        stampMethods: ['placed'],
+        gpsCheck: true,
+      }),
+      memberId: 'member-a',
+      method: 'placed-qr',
+      withinRange: true,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('店読み取りにはGPSチェックを適用しない（申告なしでも押せる）', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    const result = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: fakeExhibitor({
+        stampMethods: ['staff'],
+        gpsCheck: true,
+      }),
+      memberId: 'member-a',
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('置きQR経路でも、スポットの gpsCheck が効く', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedExhibitorDoc(store, 'spot-b', {
+      name: '展望台',
+      kind: 'spot',
+      stampCode: CODE_B,
+      stampMethods: ['placed'],
+      gpsCheck: true,
+    });
+    const denied = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+    });
+    expect(denied.ok).toBe(false);
+    if (!denied.ok) expect(denied.code).toBe('gps-check-failed');
+
+    const allowed = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+      withinRange: true,
+    });
+    expect(allowed.ok).toBe(true);
+  });
+
+  it('事前情報: gpsCheck が有効なときだけ座標が返る', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedExhibitorDoc(store, 'spot-b', {
+      name: '展望台',
+      kind: 'spot',
+      stampCode: CODE_B,
+      stampMethods: ['placed'],
+      gpsCheck: true,
+      profile: { location: { lat: 35.5, lng: 138.5 } },
+    });
+    const withCheck = await getPlacedQrCheckpointInfo(db, {
+      eventId: GRANT_EVENT_ID,
+      stampCode: CODE_B,
+    });
+    expect(withCheck.ok).toBe(true);
+    if (withCheck.ok) {
+      expect(withCheck.info.gpsCheck).toBe(true);
+      expect(withCheck.info.location).toEqual({ lat: 35.5, lng: 138.5 });
+    }
+
+    seedExhibitorDoc(store, 'spot-c', {
+      name: '広場',
+      kind: 'spot',
+      stampCode: 'CCCCCCCCCCCCCCCCCCCC',
+      stampMethods: ['placed'],
+      gpsCheck: false,
+      profile: { location: { lat: 35.5, lng: 138.5 } },
+    });
+    const withoutCheck = await getPlacedQrCheckpointInfo(db, {
+      eventId: GRANT_EVENT_ID,
+      stampCode: 'CCCCCCCCCCCCCCCCCCCC',
+    });
+    expect(withoutCheck.ok).toBe(true);
+    if (withoutCheck.ok) {
+      expect(withoutCheck.info.gpsCheck).toBe(false);
+      expect(withoutCheck.info.location).toBeNull();
+    }
+  });
+});
+
+describe('evaluateStampVelocity（移動速度チェックの判定）', () => {
+  const here = { lat: 35, lng: 138 };
+  const far = { lat: 36, lng: 138 }; // 約111km
+
+  it('あり得ない速さ（111kmを10秒）は拒否', () => {
+    expect(
+      evaluateStampVelocity({
+        previousLocation: far,
+        previousAtMs: 1_000_000,
+        currentLocation: here,
+        nowMs: 1_010_000,
+      }),
+    ).toEqual({ allowed: false });
+  });
+
+  it('通常の移動（111kmを2時間）は通す', () => {
+    expect(
+      evaluateStampVelocity({
+        previousLocation: far,
+        previousAtMs: 1_000_000,
+        currentLocation: here,
+        nowMs: 1_000_000 + 2 * 3_600_000,
+      }),
+    ).toEqual({ allowed: true });
+  });
+
+  it('座標が無い・前回が無い場合は判定せず通す', () => {
+    expect(
+      evaluateStampVelocity({
+        previousLocation: null,
+        previousAtMs: 1_000_000,
+        currentLocation: here,
+        nowMs: 1_010_000,
+      }),
+    ).toEqual({ allowed: true });
+    expect(
+      evaluateStampVelocity({
+        previousLocation: far,
+        previousAtMs: null,
+        currentLocation: here,
+        nowMs: 1_010_000,
+      }),
+    ).toEqual({ allowed: true });
+    expect(
+      evaluateStampVelocity({
+        previousLocation: far,
+        previousAtMs: 1_000_000,
+        currentLocation: null,
+        nowMs: 1_010_000,
+      }),
+    ).toEqual({ allowed: true });
+  });
+
+  it('同時刻でも実質同じ場所なら通す', () => {
+    expect(
+      evaluateStampVelocity({
+        previousLocation: here,
+        previousAtMs: 1_000_000,
+        currentLocation: { lat: 35.0001, lng: 138 },
+        nowMs: 1_000_000,
+      }),
+    ).toEqual({ allowed: true });
+  });
+});
+
+describe('grantedAtMillis', () => {
+  it('Timestamp・Date・数値・文字列を解釈する', () => {
+    const date = new Date('2026-11-25T10:00:00.000Z');
+    expect(grantedAtMillis({ toDate: () => date })).toBe(date.getTime());
+    expect(grantedAtMillis(date)).toBe(date.getTime());
+    expect(grantedAtMillis(12345)).toBe(12345);
+    expect(grantedAtMillis('2026-11-25T10:00:00.000Z')).toBe(date.getTime());
+    expect(grantedAtMillis(undefined)).toBeNull();
+    expect(grantedAtMillis('not-a-date')).toBeNull();
+    expect(grantedAtMillis({})).toBeNull();
+  });
+});
+
+describe('grantStamp: 移動速度チェックの実施', () => {
+  function seedPreviousStamp(
+    store: Map<string, DocData>,
+    exhibitorId: string,
+    atMs: number,
+  ) {
+    store.set(`events/${GRANT_EVENT_ID}/stamps/member-a_1_${exhibitorId}`, {
+      memberId: 'member-a',
+      exhibitorId,
+      round: 1,
+      grantedDateJst: '2026-11-25',
+      grantedAt: { toDate: () => new Date(atMs) },
+    });
+  }
+
+  function seedCurrentSpot(store: Map<string, DocData>) {
+    seedExhibitorDoc(store, 'spot-b', {
+      name: '展望台',
+      kind: 'spot',
+      stampCode: CODE_B,
+      stampMethods: ['placed'],
+      velocityCheck: true,
+      profile: { location: { lat: 35, lng: 138 } },
+    });
+  }
+
+  it('あり得ない移動（約111kmを10秒）は拒否する（403・コードつき）', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedCurrentSpot(store);
+    seedExhibitorDoc(store, 'shop-x', {
+      name: '遠い店',
+      kind: 'shop',
+      profile: { location: { lat: 36, lng: 138 } },
+    });
+    // 付与は実時刻で行われるため、前回は「10秒前」に置く
+    seedPreviousStamp(store, 'shop-x', Date.now() - 10_000);
+
+    const result = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('too-fast');
+  });
+
+  it('通常の移動（約11kmを1時間）は通す', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedCurrentSpot(store);
+    seedExhibitorDoc(store, 'shop-x', {
+      name: '近くの店',
+      kind: 'shop',
+      profile: { location: { lat: 35.1, lng: 138 } },
+    });
+    seedPreviousStamp(store, 'shop-x', Date.now() - 3_600_000);
+
+    const result = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('前回のチェックポイントに座標が無ければ通す', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedCurrentSpot(store);
+    seedExhibitorDoc(store, 'shop-x', { name: '座標なしの店', kind: 'shop' });
+    seedPreviousStamp(store, 'shop-x', Date.now() - 1000);
+
+    const result = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('前回スタンプが無ければ通す', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedCurrentSpot(store);
+    const result = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('店読み取り（staff）には速度チェックを適用しない', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedExhibitorDoc(store, 'shop-a', {
+      name: '店A',
+      kind: 'shop',
+      stampMethods: ['staff'],
+      velocityCheck: true,
+      profile: { location: { lat: 35, lng: 138 } },
+    });
+    seedExhibitorDoc(store, 'shop-x', {
+      name: '遠い店',
+      kind: 'shop',
+      profile: { location: { lat: 36, lng: 138 } },
+    });
+    seedPreviousStamp(store, 'shop-x', Date.now() - 1000);
+
+    const result = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: fakeExhibitor({
+        id: 'shop-a',
+        stampMethods: ['staff'],
+        velocityCheck: true,
+      }),
+      memberId: 'member-a',
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('velocityCheck が無効なら、あり得ない移動でも通す', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedExhibitorDoc(store, 'spot-b', {
+      name: '展望台',
+      kind: 'spot',
+      stampCode: CODE_B,
+      stampMethods: ['placed'],
+      velocityCheck: false,
+      profile: { location: { lat: 35, lng: 138 } },
+    });
+    seedExhibitorDoc(store, 'shop-x', {
+      name: '遠い店',
+      kind: 'shop',
+      profile: { location: { lat: 36, lng: 138 } },
+    });
+    seedPreviousStamp(store, 'shop-x', Date.now() - 1000);
+
+    const result = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+    });
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('回転QRの付与（grantStampByRotatingQr）', () => {
+  const SECRET = 'rotating-test-secret';
+  const NOW = new Date('2026-11-25T10:00:00.000Z');
+
+  function seedRotatingSpot(
+    store: Map<string, DocData>,
+    overrides: DocData = {},
+  ) {
+    seedExhibitorDoc(store, 'spot-r', {
+      name: '回転スポット',
+      kind: 'spot',
+      stampMethods: ['rotating'],
+      rotatingSecret: SECRET,
+      ...overrides,
+    });
+  }
+
+  function codeAt(offsetWindows: number): string {
+    return buildRotatingCode(
+      SECRET,
+      GRANT_EVENT_ID,
+      'spot-r',
+      rotatingWindowIndex(NOW.getTime()) + offsetWindows,
+    );
+  }
+
+  it('現在のコードで押せて、方式 rotating で記録される', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedRotatingSpot(store);
+    const result = await grantStampByRotatingQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      token: codeAt(0),
+      now: NOW,
+    });
+    expect(result.ok).toBe(true);
+    const stampDoc = store.get(
+      `events/${GRANT_EVENT_ID}/stamps/member-a_1_spot-r`,
+    );
+    expect(stampDoc?.method).toBe('rotating');
+  });
+
+  it('1つ前のコードでも押せる', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedRotatingSpot(store);
+    const result = await grantStampByRotatingQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      token: codeAt(-1),
+      now: NOW,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('2つ前のコードは期限切れで拒否する（400）', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedRotatingSpot(store);
+    const result = await grantStampByRotatingQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      token: codeAt(-2),
+      now: NOW,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(400);
+  });
+
+  it('改ざんしたコードは拒否する（400）', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedRotatingSpot(store);
+    const valid = codeAt(0);
+    const tampered = valid.slice(0, -2) + (valid.endsWith('AA') ? 'BB' : 'AA');
+    const result = await grantStampByRotatingQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      token: tampered,
+      now: NOW,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(400);
+  });
+
+  it('rotating が無効なチェックポイントでは拒否する（403）', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedRotatingSpot(store, { stampMethods: ['placed'] });
+    const result = await grantStampByRotatingQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      token: codeAt(0),
+      now: NOW,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(403);
+  });
+
+  it('gpsCheck が有効なら回転QRでも申告が必要で、事前情報に座標が返る', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedRotatingSpot(store, {
+      gpsCheck: true,
+      profile: { location: { lat: 35.5, lng: 138.5 } },
+    });
+    const info = await getRotatingCheckpointInfo(db, {
+      eventId: GRANT_EVENT_ID,
+      token: codeAt(0),
+      now: NOW,
+    });
+    expect(info.ok).toBe(true);
+    if (info.ok) {
+      expect(info.info.gpsCheck).toBe(true);
+      expect(info.info.location).toEqual({ lat: 35.5, lng: 138.5 });
+    }
+
+    const denied = await grantStampByRotatingQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      token: codeAt(0),
+      now: NOW,
+    });
+    expect(denied.ok).toBe(false);
+    if (!denied.ok) expect(denied.code).toBe('gps-check-failed');
+
+    const allowed = await grantStampByRotatingQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      token: codeAt(0),
+      withinRange: true,
+      now: NOW,
+    });
+    expect(allowed.ok).toBe(true);
   });
 });

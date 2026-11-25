@@ -35,6 +35,29 @@ export function eventStampQrUrl(eventId: string, stampCode: string): string {
 }
 
 /**
+ * 回転QR（固定ディスプレイ）の飛び先 URL。来場者ページが rstamp
+ * パラメータを検出すると、そのチェックポイントのスタンプ付与に進む。
+ */
+export function eventRotatingStampUrl(eventId: string, code: string): string {
+  return `${eventVisitorUrl(eventId)}?rstamp=${encodeURIComponent(code)}`;
+}
+
+/**
+ * 回転QRの表示専用ページの URL（表示リンク）。チェックポイントに固定
+ * するタブレット等で開く。表示用トークンを含むため、リンク自体が鍵。
+ */
+export function checkpointDisplayUrl(
+  eventId: string,
+  exhibitorId: string,
+  displayToken: string,
+): string {
+  return (
+    `${resolveAppOrigin()}/e/${encodeURIComponent(eventId)}` +
+    `/display/${encodeURIComponent(exhibitorId)}?dt=${encodeURIComponent(displayToken)}`
+  );
+}
+
+/**
  * 参加店の自己登録ページの URL。どこからもリンクされていないため、
  * 主催者がこの URL を店へ直接渡して案内する（管理画面に表示する）。
  */
