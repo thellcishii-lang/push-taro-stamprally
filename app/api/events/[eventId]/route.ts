@@ -48,6 +48,7 @@ const EDITABLE_FIELDS: Array<keyof UpdateEventInput> = [
   'stampGoalCount',
   'stampRewardType',
   'stampBenefitText',
+  'sequentialStamps',
   'rankingMinReviews',
   'reviewCategories',
   'loginBonusEnabled',

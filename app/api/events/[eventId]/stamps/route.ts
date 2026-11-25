@@ -43,7 +43,13 @@ export async function POST(
   });
   if (!result.ok) {
     return NextResponse.json(
-      { error: result.error },
+      {
+        error: result.error,
+        // 順番モードの順番違いでは、次の番号を画面の案内に使えるよう返す
+        ...(result.nextCheckpointNumber !== undefined
+          ? { nextCheckpointNumber: result.nextCheckpointNumber }
+          : {}),
+      },
       { status: result.status },
     );
   }

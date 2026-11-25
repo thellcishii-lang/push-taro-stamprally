@@ -48,7 +48,8 @@ beforeEach(() => {
     billingOptionEnabled: true,
   });
   mocks.listExhibitors.mockResolvedValue([
-    { id: 'shop-1', name: '店A', email: null, hasAccessCode: true, lang: 'ja' },
+    // 実 lib の listExhibitors は kind を必ず返す（旧データは 'shop' に倒す）
+    { id: 'shop-1', name: '店A', email: null, hasAccessCode: true, lang: 'ja', kind: 'shop' },
   ]);
   mocks.listShopBillings.mockResolvedValue([
     { exhibitorId: 'shop-1', status: 'active', monthlyAmount: 3000 },

@@ -3,18 +3,24 @@
 // 取消し可否。Firestore を使う処理（grantStamp 等）はルートテスト側で
 // lib をモックして検証する。
 import type { Firestore } from 'firebase-admin/firestore';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EventExhibitor } from './event-coupon';
 import {
   buildStampRewardSnapshot,
+  evaluateSequentialStamp,
   evaluateStampCancel,
+  getStampCard,
   grantStamp,
+  grantStampByPlacedQr,
   isRoundCompleted,
   parseStampMethod,
   redeemFreeCoupon,
   resolveCurrentRound,
   stampIdFor,
 } from './event-stamp';
+
+const storeMocks = vi.hoisted(() => ({ getEvent: vi.fn() }));
+vi.mock('./event-store', () => ({ getEvent: storeMocks.getEvent }));
 
 describe('stampIdFor', () => {
   it('memberId・周・参加店ID から一意なIDを作る', () => {
@@ -145,6 +151,10 @@ describe('協賛（広告専用）アカウントのガード', () => {
     delistedAt: null,
     closedAt: null,
     stampCode: null,
+    checkpointNumber: null,
+    stampMethods: [],
+    gpsCheck: false,
+    velocityCheck: false,
   };
 
   it('協賛アカウントはスタンプを押せない（403）', async () => {
@@ -179,5 +189,401 @@ describe('parseStampMethod（付与方式の読み取り）', () => {
     expect(parseStampMethod('unknown')).toBe('shop-qr');
     // GPS 方式があった時期の記録も壊れず従来方式として読む
     expect(parseStampMethod('gps')).toBe('shop-qr');
+  });
+});
+
+describe('evaluateSequentialStamp（順番モードの判定）', () => {
+  const checkpoints = [
+    { exhibitorId: 'cp-1', checkpointNumber: 1 },
+    { exhibitorId: 'cp-2', checkpointNumber: 2 },
+    { exhibitorId: 'cp-3', checkpointNumber: 3 },
+    { exhibitorId: 'cp-x', checkpointNumber: null },
+  ];
+  it('正順なら押せる（次は未取得の最小番号）', () => {
+    expect(
+      evaluateSequentialStamp({
+        checkpoints,
+        stampedExhibitorIds: new Set(),
+        targetExhibitorId: 'cp-1',
+      }),
+    ).toEqual({ allowed: true });
+    expect(
+      evaluateSequentialStamp({
+        checkpoints,
+        stampedExhibitorIds: new Set(['cp-1']),
+        targetExhibitorId: 'cp-2',
+      }),
+    ).toEqual({ allowed: true });
+  });
+  it('飛ばすと拒否し、次の番号を返す', () => {
+    expect(
+      evaluateSequentialStamp({
+        checkpoints,
+        stampedExhibitorIds: new Set(),
+        targetExhibitorId: 'cp-2',
+      }),
+    ).toEqual({ allowed: false, reason: 'not-next', nextNumber: 1 });
+    expect(
+      evaluateSequentialStamp({
+        checkpoints,
+        stampedExhibitorIds: new Set(['cp-1']),
+        targetExhibitorId: 'cp-3',
+      }),
+    ).toEqual({ allowed: false, reason: 'not-next', nextNumber: 2 });
+  });
+  it('番号のないチェックポイントは対象外', () => {
+    expect(
+      evaluateSequentialStamp({
+        checkpoints,
+        stampedExhibitorIds: new Set(['cp-1']),
+        targetExhibitorId: 'cp-x',
+      }),
+    ).toEqual({ allowed: false, reason: 'no-number', nextNumber: 2 });
+  });
+});
+
+// ─── フェイク Firestore（grantStamp 系の統合テスト用） ───
+
+type DocData = Record<string, unknown>;
+const GRANT_EVENT_ID = 'event-1';
+
+function createStampFakeDb() {
+  const store = new Map<string, DocData>();
+  let autoId = 0;
+  const copy = (data: DocData): DocData => ({ ...data });
+
+  function docRef(path: string): Record<string, unknown> {
+    const id = path.split('/').pop()!;
+    return {
+      id,
+      path,
+      get: async () => {
+        const data = store.get(path);
+        return {
+          exists: data !== undefined,
+          id,
+          data: () => (data ? copy(data) : undefined),
+        };
+      },
+      set: async (data: DocData) => {
+        store.set(path, copy(data));
+      },
+      update: async (data: DocData) => {
+        const current = store.get(path);
+        if (!current) throw new Error(`更新対象がありません: ${path}`);
+        store.set(path, { ...current, ...copy(data) });
+      },
+      collection: (name: string) => collectionRef(`${path}/${name}`),
+    };
+  }
+
+  function collectionRef(path: string): Record<string, unknown> {
+    const filters: Array<[string, unknown]> = [];
+    const self: Record<string, unknown> = {
+      doc: (id?: string) => docRef(`${path}/${id ?? `auto-${++autoId}`}`),
+      where: (field: string, _op: string, value: unknown) => {
+        filters.push([field, value]);
+        return self;
+      },
+      limit: (_n: number) => self,
+      get: async () => {
+        const docs: Array<Record<string, unknown>> = [];
+        for (const [docPath, data] of store.entries()) {
+          if (!docPath.startsWith(`${path}/`)) continue;
+          const rest = docPath.slice(path.length + 1);
+          if (rest.includes('/')) continue;
+          if (filters.every(([field, value]) => data[field] === value)) {
+            docs.push({
+              id: rest,
+              data: () => copy(data),
+              ref: docRef(docPath),
+            });
+          }
+        }
+        return { docs, empty: docs.length === 0 };
+      },
+    };
+    return self;
+  }
+
+  const db = {
+    collection: (name: string) => collectionRef(name),
+    runTransaction: async (
+      fn: (tx: {
+        get: (ref: never) => Promise<unknown>;
+        set: (ref: never, data: DocData) => Promise<void>;
+        update: (ref: never, data: DocData) => Promise<void>;
+      }) => Promise<unknown>,
+    ) =>
+      fn({
+        get: (ref: { get: () => Promise<unknown> }) => ref.get(),
+        set: (ref: { set: (data: DocData) => Promise<void> }, data: DocData) =>
+          ref.set(data),
+        update: (
+          ref: { update: (data: DocData) => Promise<void> },
+          data: DocData,
+        ) => ref.update(data),
+      }),
+  };
+  return { db: db as unknown as Firestore, store };
+}
+
+function liveEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    id: GRANT_EVENT_ID,
+    status: 'live',
+    stampGoalCount: 5,
+    stampRewardType: 'free-dish',
+    stampBenefitText: '',
+    sequentialStamps: false,
+    ...overrides,
+  };
+}
+
+function fakeExhibitor(overrides: Partial<EventExhibitor>): EventExhibitor {
+  return {
+    id: 'shop-a',
+    name: '店A',
+    email: 'a@example.com',
+    address: null,
+    hasAccessCode: true,
+    lang: 'ja',
+    kind: 'shop',
+    source: 'admin',
+    delistedAt: null,
+    closedAt: null,
+    stampCode: null,
+    checkpointNumber: null,
+    stampMethods: ['staff'],
+    gpsCheck: false,
+    velocityCheck: false,
+    ...overrides,
+  };
+}
+
+function seedExhibitorDoc(
+  store: Map<string, DocData>,
+  id: string,
+  data: DocData,
+) {
+  store.set(`events/${GRANT_EVENT_ID}/exhibitors/${id}`, data);
+}
+
+function seedSubscriber(store: Map<string, DocData>, memberId: string) {
+  store.set(`events/${GRANT_EVENT_ID}/subscribers/${memberId}`, {});
+}
+
+const CODE_A = 'AAAAAAAAAAAAAAAAAAAA';
+const CODE_B = 'BBBBBBBBBBBBBBBBBBBB';
+
+beforeEach(() => {
+  storeMocks.getEvent.mockReset();
+  storeMocks.getEvent.mockResolvedValue(liveEvent());
+});
+
+describe('grantStamp: 認証方法の実施', () => {
+  it('店読みが無効なチェックポイントでは店読みを拒否する（403）', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    const result = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: fakeExhibitor({ stampMethods: ['placed'] }),
+      memberId: 'member-a',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(403);
+  });
+
+  it('置きQRが無効なスポットでは置きQRを拒否する（403）', async () => {
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedExhibitorDoc(store, 'spot-b', {
+      name: 'スポットB',
+      kind: 'spot',
+      stampCode: CODE_B,
+      stampMethods: ['staff'],
+    });
+    const result = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(403);
+  });
+});
+
+describe('スポットのスタンプ合算（置きQR）', () => {
+  it('スポットのスタンプもお店と同じカード・目標に数え、達成で発行される', async () => {
+    storeMocks.getEvent.mockResolvedValue(liveEvent({ stampGoalCount: 2 }));
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedExhibitorDoc(store, 'spot-b', {
+      name: '展望台',
+      kind: 'spot',
+      stampCode: CODE_B,
+      stampMethods: ['placed'],
+      checkpointNumber: 2,
+    });
+    seedExhibitorDoc(store, 'shop-a', {
+      name: '店A',
+      kind: 'shop',
+      stampCode: CODE_A,
+      stampMethods: ['staff', 'placed'],
+      checkpointNumber: 1,
+    });
+
+    const first = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+    });
+    expect(first.ok).toBe(true);
+    if (first.ok) {
+      expect(first.countInRound).toBe(1);
+      expect(first.completed).toBe(false);
+      expect(first.exhibitorName).toBe('展望台');
+    }
+
+    const second = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_A,
+    });
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.countInRound).toBe(2);
+      expect(second.completed).toBe(true);
+      expect(second.freeCouponId).toBeTruthy();
+    }
+
+    const card = await getStampCard(db, GRANT_EVENT_ID, 'member-a');
+    expect(card).not.toBeNull();
+    // 達成で次周に進んでいるため、今の周のスタンプは 0。無料クーポンが
+    // 1枚発行されていることで合算・達成を確認する。
+    expect(card?.freeCoupons).toHaveLength(1);
+  });
+
+  it('カードのスタンプにスポットの種別と番号が付く', async () => {
+    storeMocks.getEvent.mockResolvedValue(liveEvent({ stampGoalCount: 5 }));
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    seedExhibitorDoc(store, 'spot-b', {
+      name: '展望台',
+      kind: 'spot',
+      stampCode: CODE_B,
+      stampMethods: ['placed'],
+      checkpointNumber: 2,
+    });
+    await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+    });
+    const card = await getStampCard(db, GRANT_EVENT_ID, 'member-a');
+    expect(card?.stamps).toHaveLength(1);
+    expect(card?.stamps[0].exhibitorKind).toBe('spot');
+    expect(card?.stamps[0].checkpointNumber).toBe(2);
+  });
+});
+
+describe('grantStamp: 順番モードの実施', () => {
+  function seedSequential(store: Map<string, DocData>) {
+    seedSubscriber(store, 'member-a');
+    seedExhibitorDoc(store, 'cp-1', {
+      name: '1番の店',
+      kind: 'shop',
+      stampCode: null,
+      stampMethods: ['staff'],
+      checkpointNumber: 1,
+    });
+    seedExhibitorDoc(store, 'cp-2', {
+      name: '2番のスポット',
+      kind: 'spot',
+      stampCode: CODE_B,
+      stampMethods: ['placed'],
+      checkpointNumber: 2,
+    });
+    seedExhibitorDoc(store, 'cp-3', {
+      name: '3番の店',
+      kind: 'shop',
+      stampCode: null,
+      stampMethods: ['staff'],
+      checkpointNumber: 3,
+    });
+    seedExhibitorDoc(store, 'cp-x', {
+      name: '番号なしの店',
+      kind: 'shop',
+      stampCode: null,
+      stampMethods: ['staff'],
+      checkpointNumber: null,
+    });
+  }
+
+  it('正順は押せて、飛ばしは次の番号つきで拒否、番号なしは対象外', async () => {
+    storeMocks.getEvent.mockResolvedValue(
+      liveEvent({ sequentialStamps: true }),
+    );
+    const { db, store } = createStampFakeDb();
+    seedSequential(store);
+    const cp1 = fakeExhibitor({ id: 'cp-1', checkpointNumber: 1 });
+    const cp3 = fakeExhibitor({ id: 'cp-3', checkpointNumber: 3 });
+    const cpX = fakeExhibitor({ id: 'cp-x', checkpointNumber: null });
+
+    const first = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: cp1,
+      memberId: 'member-a',
+    });
+    expect(first.ok).toBe(true);
+
+    const skipped = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: cp3,
+      memberId: 'member-a',
+    });
+    expect(skipped.ok).toBe(false);
+    if (!skipped.ok) {
+      expect(skipped.status).toBe(409);
+      expect(skipped.nextCheckpointNumber).toBe(2);
+      expect(skipped.error).toContain('次は2番');
+    }
+
+    const second = await grantStampByPlacedQr(db, {
+      eventId: GRANT_EVENT_ID,
+      memberId: 'member-a',
+      stampCode: CODE_B,
+    });
+    expect(second.ok).toBe(true);
+
+    const noNumber = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: cpX,
+      memberId: 'member-a',
+    });
+    expect(noNumber.ok).toBe(false);
+    if (!noNumber.ok) expect(noNumber.status).toBe(403);
+
+    const third = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: cp3,
+      memberId: 'member-a',
+    });
+    expect(third.ok).toBe(true);
+  });
+
+  it('順番モードがオフなら番号と違う順番でも押せる', async () => {
+    storeMocks.getEvent.mockResolvedValue(
+      liveEvent({ sequentialStamps: false }),
+    );
+    const { db, store } = createStampFakeDb();
+    seedSequential(store);
+    const cp3 = fakeExhibitor({ id: 'cp-3', checkpointNumber: 3 });
+    const result = await grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: cp3,
+      memberId: 'member-a',
+    });
+    expect(result.ok).toBe(true);
   });
 });

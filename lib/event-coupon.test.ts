@@ -1,5 +1,49 @@
 // lib/event-coupon.test.ts
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// updateExhibitorCheckpointSettings のテスト用フェイク Firestore。
+// exhibitors コレクションの doc 取得・一覧・更新だけを再現する。
+const fakeExhibitorDocs = vi.hoisted(() => ({
+  docs: new Map<string, Record<string, unknown>>(),
+}));
+vi.mock('./firebase-admin', () => {
+  const exhibitorsCollection = (eventId: string) => ({
+    doc: (id: string) => ({
+      get: async () => {
+        const data = fakeExhibitorDocs.docs.get(`${eventId}/${id}`);
+        return {
+          exists: data !== undefined,
+          id,
+          data: () => data,
+        };
+      },
+      update: async (patch: Record<string, unknown>) => {
+        const key = `${eventId}/${id}`;
+        const current = fakeExhibitorDocs.docs.get(key);
+        if (!current) throw new Error(`更新対象がありません: ${key}`);
+        fakeExhibitorDocs.docs.set(key, { ...current, ...patch });
+      },
+    }),
+    get: async () => ({
+      docs: [...fakeExhibitorDocs.docs.entries()]
+        .filter(([key]) => key.startsWith(`${eventId}/`))
+        .map(([key, data]) => ({
+          id: key.slice(eventId.length + 1),
+          data: () => data,
+        })),
+    }),
+  });
+  return {
+    db: {
+      collection: () => ({
+        doc: (eventId: string) => ({
+          collection: () => exhibitorsCollection(eventId),
+        }),
+      }),
+    },
+  };
+});
+
 import {
   EventClaim,
   EventCoupon,
@@ -13,10 +57,17 @@ import {
   memberIdForDevice,
   memberIdForPhone,
   normalizeCouponWindows,
+  defaultStampMethods,
+  findCheckpointNumberConflict,
+  normalizeStampMethods,
+  parseCheckpointNumber,
   parseCouponIssuedBy,
   parseCouponWindowDate,
   parseExhibitorKind,
+  parseStampMethods,
   tallyClaimsByCoupon,
+  updateExhibitorCheckpointSettings,
+  type EventExhibitor,
 } from './event-coupon';
 
 const couponA: EventCoupon = {
@@ -180,14 +231,199 @@ describe('ID生成', () => {
 });
 
 describe('parseExhibitorKind（アカウントの種類）', () => {
-  it("'advertiser' だけを協賛とし、それ以外は参加店に倒す", () => {
+  it("'advertiser' だけを協賛、'spot' だけをスポットとし、それ以外は参加店に倒す", () => {
     expect(parseExhibitorKind('advertiser')).toBe('advertiser');
+    expect(parseExhibitorKind('spot')).toBe('spot');
     expect(parseExhibitorKind('shop')).toBe('shop');
     // 旧ドキュメント（項目なし）は参加店
     expect(parseExhibitorKind(undefined)).toBe('shop');
     expect(parseExhibitorKind(null)).toBe('shop');
     expect(parseExhibitorKind('other')).toBe('shop');
     expect(parseExhibitorKind(1)).toBe('shop');
+  });
+});
+
+describe('チェックポイント番号の読み取り（parseCheckpointNumber）', () => {
+  it('1以上の整数だけが有効', () => {
+    expect(parseCheckpointNumber(1)).toBe(1);
+    expect(parseCheckpointNumber(12)).toBe(12);
+    expect(parseCheckpointNumber(0)).toBeNull();
+    expect(parseCheckpointNumber(-2)).toBeNull();
+    expect(parseCheckpointNumber(1.5)).toBeNull();
+    expect(parseCheckpointNumber('3')).toBeNull();
+    expect(parseCheckpointNumber(undefined)).toBeNull();
+    expect(parseCheckpointNumber(null)).toBeNull();
+  });
+});
+
+describe('スタンプ認証方法（既定値・読み取り・正規化）', () => {
+  it('種別の既定値: 参加店は店読み、スポットは置きQR、協賛はなし', () => {
+    expect(defaultStampMethods('shop')).toEqual(['staff']);
+    expect(defaultStampMethods('spot')).toEqual(['placed']);
+    expect(defaultStampMethods('advertiser')).toEqual([]);
+  });
+  it('項目が無い旧ドキュメントは種別の既定値に倒す', () => {
+    expect(parseStampMethods(undefined, 'shop')).toEqual(['staff']);
+    expect(parseStampMethods(undefined, 'spot')).toEqual(['placed']);
+    expect(parseStampMethods('staff', 'shop')).toEqual(['staff']);
+  });
+  it('保存済みの配列は有効な値だけを残す（空配列は尊重する）', () => {
+    expect(parseStampMethods(['placed', 'staff', 'bogus'], 'shop')).toEqual([
+      'staff',
+      'placed',
+    ]);
+    expect(parseStampMethods([], 'shop')).toEqual([]);
+    expect(parseStampMethods(['rotating'], 'spot')).toEqual(['rotating']);
+  });
+  it('書き込み時は1つ以上必須で、形式不正は例外', () => {
+    expect(normalizeStampMethods(['rotating', 'placed'])).toEqual([
+      'placed',
+      'rotating',
+    ]);
+    expect(() => normalizeStampMethods([])).toThrow();
+    expect(() => normalizeStampMethods(['bogus'])).toThrow();
+    expect(() => normalizeStampMethods('staff')).toThrow();
+  });
+});
+
+describe('findCheckpointNumberConflict（番号の重複）', () => {
+  const base: EventExhibitor = {
+    id: 'cp-a',
+    name: 'A',
+    email: null,
+    address: null,
+    hasAccessCode: false,
+    lang: 'ja',
+    kind: 'shop',
+    source: 'admin',
+    delistedAt: null,
+    closedAt: null,
+    stampCode: null,
+    checkpointNumber: 2,
+    stampMethods: ['staff'],
+    gpsCheck: false,
+    velocityCheck: false,
+  };
+  it('他のチェックポイントが同じ番号を持てば重複', () => {
+    const conflict = findCheckpointNumberConflict([base], 'cp-b', 2);
+    expect(conflict?.id).toBe('cp-a');
+  });
+  it('自分自身・協賛・閉店扱い・番号なしは重複に数えない', () => {
+    expect(findCheckpointNumberConflict([base], 'cp-a', 2)).toBeNull();
+    expect(
+      findCheckpointNumberConflict(
+        [{ ...base, id: 'cp-c', kind: 'advertiser' }],
+        'cp-b',
+        2,
+      ),
+    ).toBeNull();
+    expect(
+      findCheckpointNumberConflict(
+        [{ ...base, id: 'cp-c', closedAt: '2026-11-01T00:00:00.000Z' }],
+        'cp-b',
+        2,
+      ),
+    ).toBeNull();
+    expect(
+      findCheckpointNumberConflict(
+        [{ ...base, id: 'cp-c', checkpointNumber: null }],
+        'cp-b',
+        2,
+      ),
+    ).toBeNull();
+    expect(findCheckpointNumberConflict([base], 'cp-b', 3)).toBeNull();
+  });
+});
+
+describe('updateExhibitorCheckpointSettings（保存と重複エラー）', () => {
+  beforeEach(() => {
+    fakeExhibitorDocs.docs.clear();
+    fakeExhibitorDocs.docs.set('event-1/cp-a', {
+      name: '店A',
+      kind: 'shop',
+      checkpointNumber: 1,
+      stampMethods: ['staff'],
+    });
+    fakeExhibitorDocs.docs.set('event-1/spot-b', {
+      name: '展望台',
+      kind: 'spot',
+      checkpointNumber: 2,
+      stampMethods: ['placed'],
+    });
+  });
+
+  it('番号・認証方法・追加チェックを保存できる', async () => {
+    const result = await updateExhibitorCheckpointSettings('event-1', 'spot-b', {
+      checkpointNumber: 5,
+      stampMethods: ['placed', 'rotating'],
+      gpsCheck: true,
+      velocityCheck: true,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.exhibitor.checkpointNumber).toBe(5);
+      expect(result.exhibitor.stampMethods).toEqual(['placed', 'rotating']);
+      expect(result.exhibitor.gpsCheck).toBe(true);
+      expect(result.exhibitor.velocityCheck).toBe(true);
+    }
+  });
+
+  it('他のチェックポイントと同じ番号は 409 で拒否する', async () => {
+    const result = await updateExhibitorCheckpointSettings('event-1', 'spot-b', {
+      checkpointNumber: 1,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(409);
+      expect(result.error).toContain('店A');
+    }
+    // 保存されていないこと
+    expect(fakeExhibitorDocs.docs.get('event-1/spot-b')?.checkpointNumber).toBe(2);
+  });
+
+  it('自分の番号のままなら重複にならない', async () => {
+    const result = await updateExhibitorCheckpointSettings('event-1', 'cp-a', {
+      checkpointNumber: 1,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('番号のクリア（null）と不正な番号・方法なしを扱う', async () => {
+    const cleared = await updateExhibitorCheckpointSettings('event-1', 'cp-a', {
+      checkpointNumber: null,
+    });
+    expect(cleared.ok).toBe(true);
+    if (cleared.ok) expect(cleared.exhibitor.checkpointNumber).toBeNull();
+
+    const invalid = await updateExhibitorCheckpointSettings('event-1', 'cp-a', {
+      checkpointNumber: 0,
+    });
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) expect(invalid.status).toBe(400);
+
+    const noMethods = await updateExhibitorCheckpointSettings('event-1', 'cp-a', {
+      stampMethods: [],
+    });
+    expect(noMethods.ok).toBe(false);
+    if (!noMethods.ok) expect(noMethods.status).toBe(400);
+  });
+
+  it('対象が無ければ 404、協賛は 400', async () => {
+    const missing = await updateExhibitorCheckpointSettings('event-1', 'nope', {
+      gpsCheck: true,
+    });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.status).toBe(404);
+
+    fakeExhibitorDocs.docs.set('event-1/sponsor', {
+      name: '協賛企業',
+      kind: 'advertiser',
+    });
+    const sponsor = await updateExhibitorCheckpointSettings('event-1', 'sponsor', {
+      gpsCheck: true,
+    });
+    expect(sponsor.ok).toBe(false);
+    if (!sponsor.ok) expect(sponsor.status).toBe(400);
   });
 });
 
