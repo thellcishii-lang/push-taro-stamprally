@@ -99,6 +99,16 @@ export interface EventConfig {
    */
   stampBenefitText: string;
   /**
+   * 順番モード（主催者がプロジェクトごとに設定する。既定オフ）。
+   * オンにすると、スタンプはチェックポイント番号の順にしか押せない
+   * （次に押せるのは、現在の周でまだ押されていない番号付きチェック
+   * ポイントのうち最小の番号。番号のないチェックポイントは対象外で
+   * 押せない）。オフの間は従来どおり自由な順番で押せる。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * オフに倒す。
+   */
+  sequentialStamps: boolean;
+  /**
    * 週次ランキングの対象になる最低レビュー件数（1〜20）。主催者が
    * プロジェクトごとに設定する。その週の可視レビューがこの件数に
    * 届いた参加店だけがランキングに入る（件数自体も一緒に表示する）。
@@ -324,6 +334,7 @@ export interface CreateEventInput {
   stampGoalCount?: number;
   stampRewardType?: StampRewardType;
   stampBenefitText?: string;
+  sequentialStamps?: boolean;
   rankingMinReviews?: number;
   reviewCategories?: string[];
   loginBonusEnabled?: boolean;

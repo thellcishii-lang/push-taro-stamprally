@@ -95,6 +95,8 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     portalEnabled: parsePortalEnabled(data.portalEnabled),
     // スタンプ達成個数も導入前のイベントには項目が無いため既定値に倒す
     stampGoalCount: parseStampGoalCount(data.stampGoalCount),
+    // 順番モードも導入前のイベントには項目が無いためオフに倒す
+    sequentialStamps: data.sequentialStamps === true,
     // 達成特典の種類・内容も同様に既定値（従来の「1軒無料」・空）に倒す
     stampRewardType: parseStampRewardType(data.stampRewardType),
     stampBenefitText: parseStampBenefitText(data.stampBenefitText),
@@ -205,6 +207,8 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     stampGoalCount: input.stampGoalCount ?? DEFAULT_STAMP_GOAL_COUNT,
     stampRewardType,
     stampBenefitText,
+    // 順番モードは作成時点ではオフ（設定画面で後から有効化する）
+    sequentialStamps: input.sequentialStamps ?? false,
     rankingMinReviews: input.rankingMinReviews ?? DEFAULT_RANKING_MIN_REVIEWS,
     reviewCategories: normalizeReviewCategories(input.reviewCategories),
     links: normalizeEventLinks(input.links),
@@ -436,6 +440,7 @@ export type UpdateEventInput = Partial<
     | 'stampGoalCount'
     | 'stampRewardType'
     | 'stampBenefitText'
+    | 'sequentialStamps'
     | 'rankingMinReviews'
     | 'reviewCategories'
     | 'links'
@@ -484,6 +489,12 @@ export async function updateEvent(
     !isValidStampGoalCount(patch.stampGoalCount)
   ) {
     throw new Error('スタンプの達成個数は1〜10の整数で指定してください');
+  }
+  if (
+    patch.sequentialStamps !== undefined &&
+    typeof patch.sequentialStamps !== 'boolean'
+  ) {
+    throw new Error('順番モードの設定形式が不正です');
   }
   if (
     patch.rankingMinReviews !== undefined &&

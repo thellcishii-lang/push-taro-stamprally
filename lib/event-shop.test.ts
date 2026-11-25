@@ -969,6 +969,27 @@ describe('listPublicShops の協賛アカウント除外', () => {
     const shops = await listPublicShops(db, 'ev1');
     expect(shops.map((s) => s.exhibitorId)).toEqual(['shop-a', 'shop-b']);
   });
+
+  it('スポットは kind とチェックポイント番号つきで一覧に出る', async () => {
+    const { db } = fakeShopDb([
+      { id: 'shop-a', data: { name: '店A', profile: {}, kind: 'shop' } },
+      {
+        id: 'spot-b',
+        data: {
+          name: '展望台',
+          profile: {},
+          kind: 'spot',
+          checkpointNumber: 2,
+        },
+      },
+    ]);
+    const shops = await listPublicShops(db, 'ev1');
+    const byId = new Map(shops.map((s) => [s.exhibitorId, s]));
+    expect(byId.get('shop-a')?.kind).toBe('shop');
+    expect(byId.get('shop-a')?.checkpointNumber).toBeNull();
+    expect(byId.get('spot-b')?.kind).toBe('spot');
+    expect(byId.get('spot-b')?.checkpointNumber).toBe(2);
+  });
 });
 
 describe('setShopDelistedAt（掲載停止の日時の付け替え）', () => {

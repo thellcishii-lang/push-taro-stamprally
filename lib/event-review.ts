@@ -27,7 +27,11 @@ import {
   REVIEW_CATEGORY_MAX_COUNT,
 } from './event';
 import { getEvent } from './event-store';
-import { getExhibitor } from './event-coupon';
+import {
+  EVENT_EXHIBITORS_COLLECTION,
+  getExhibitor,
+  parseExhibitorKind,
+} from './event-coupon';
 import {
   EVENT_STAMPS_COLLECTION,
   hasStampForShop,
@@ -555,6 +559,13 @@ export async function upsertReview(
   if (!exhibitor) {
     return { ok: false, status: 404, error: 'お店が見つかりません' };
   }
+  if (exhibitor.kind === 'spot') {
+    return {
+      ok: false,
+      status: 400,
+      error: 'スポットにはレビューを書けません',
+    };
+  }
   const eligible = await hasStampForShop(
     db,
     input.eventId,
@@ -615,12 +626,23 @@ export async function listMyReviews(
 /**
  * レビューを書ける店の一覧（スタンプをもらった店）。
  * スタンプ記録から重複を除いて集める。店名は最新のスタンプのものを採る。
+ * スポット（チェックポイント専用）はレビューの対象ではないため除く。
  */
 export async function listReviewableShops(
   db: Firestore,
   eventId: string,
   memberId: string,
 ): Promise<ReviewableShop[]> {
+  const exhibitorsSnap = await db
+    .collection('events')
+    .doc(eventId)
+    .collection(EVENT_EXHIBITORS_COLLECTION)
+    .get();
+  const spotIds = new Set(
+    exhibitorsSnap.docs
+      .filter((doc) => parseExhibitorKind(doc.data().kind) === 'spot')
+      .map((doc) => doc.id),
+  );
   const snap = await db
     .collection('events')
     .doc(eventId)
@@ -631,7 +653,7 @@ export async function listReviewableShops(
   for (const doc of snap.docs) {
     const data = doc.data();
     const exhibitorId = String(data.exhibitorId ?? '');
-    if (!exhibitorId) continue;
+    if (!exhibitorId || spotIds.has(exhibitorId)) continue;
     byExhibitor.set(exhibitorId, {
       exhibitorId,
       exhibitorName: String(data.exhibitorName ?? ''),

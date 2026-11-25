@@ -16,6 +16,9 @@
 //   スタンプしか押せないのは ID の構造上自明。
 // - placed-qr: お客さん本人が、スポットの stampCode（推測不能）で押す。
 // どの方式でも、会員・周・重複の規則は共通の grantStamp に合流する。
+// あわせて grantStamp では、チェックポイントごとの認証設定
+// （stampMethods: 有効な方法だけ許可）と、プロジェクトの順番モード
+// （sequentialStamps: 番号順にしか押せない）もここで実施する。
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import {
   EVENT_SUBCOLLECTIONS,
@@ -30,6 +33,7 @@ import {
   EVENT_EXHIBITORS_COLLECTION,
   mapExhibitor,
   type EventExhibitor,
+  type ExhibitorKind,
 } from './event-coupon';
 import { isValidStampCode } from './stamp-qr';
 
@@ -65,6 +69,14 @@ export interface EventStamp {
   grantedAt: string | null;
   /** 付与方式。導入前の旧レコードは 'shop-qr' として読む */
   method: StampMethod;
+  /**
+   * チェックポイントの種別（表示用）。スタンプ記録自体には持たず、
+   * カード読み取り時に現在のチェックポイント情報から解決して付ける
+   * （getStampCard）。解決できない場合は未設定。
+   */
+  exhibitorKind?: ExhibitorKind;
+  /** チェックポイント番号（同上。番号なしは null） */
+  checkpointNumber?: number | null;
 }
 
 /** 無料クーポンの発行元。スタンプ達成か、毎日ログインボーナスか。 */
@@ -206,6 +218,64 @@ export function evaluateStampCancel(
   return { allowed: true };
 }
 
+/** 順番モードの判定に使うチェックポイント（番号つき判定用）。 */
+export interface SequentialCheckpoint {
+  exhibitorId: string;
+  checkpointNumber: number | null;
+}
+
+export type SequentialStampDecision =
+  | { allowed: true }
+  | {
+      allowed: false;
+      reason: 'no-number' | 'not-next';
+      /** 次に押せるチェックポイントの番号（残りが無ければ null） */
+      nextNumber: number | null;
+    };
+
+/**
+ * 順番モードでの付与可否（純粋関数）。
+ * 「次」は、現在の周でまだ押されていない番号付きチェックポイントの
+ * うち最小の番号。押そうとするチェックポイントの番号がそれと一致
+ * するときだけ許可する。番号のないチェックポイントは対象外。
+ */
+export function evaluateSequentialStamp(input: {
+  checkpoints: SequentialCheckpoint[];
+  /** 現在の周で既に押されているチェックポイントの ID 集合 */
+  stampedExhibitorIds: ReadonlySet<string>;
+  targetExhibitorId: string;
+}): SequentialStampDecision {
+  const numbered = input.checkpoints
+    .filter(
+      (
+        checkpoint,
+      ): checkpoint is SequentialCheckpoint & { checkpointNumber: number } =>
+        checkpoint.checkpointNumber !== null,
+    )
+    .sort((a, b) => a.checkpointNumber - b.checkpointNumber);
+  const stampedNumbers = new Set(
+    numbered
+      .filter((checkpoint) =>
+        input.stampedExhibitorIds.has(checkpoint.exhibitorId),
+      )
+      .map((checkpoint) => checkpoint.checkpointNumber),
+  );
+  const next = numbered.find(
+    (checkpoint) => !stampedNumbers.has(checkpoint.checkpointNumber),
+  );
+  const nextNumber = next ? next.checkpointNumber : null;
+  const target = input.checkpoints.find(
+    (checkpoint) => checkpoint.exhibitorId === input.targetExhibitorId,
+  );
+  if (!target || target.checkpointNumber === null) {
+    return { allowed: false, reason: 'no-number', nextNumber };
+  }
+  if (target.checkpointNumber !== nextNumber) {
+    return { allowed: false, reason: 'not-next', nextNumber };
+  }
+  return { allowed: true };
+}
+
 // ─── Firestore 読み書き ───
 
 function stampsRef(db: Firestore, eventId: string) {
@@ -293,7 +363,13 @@ export type GrantStampResult =
       rewardType: StampRewardType;
       benefitText: string;
     }
-  | { ok: false; status: number; error: string };
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      /** 順番モードで順番違いのとき、次に押せるチェックポイントの番号 */
+      nextCheckpointNumber?: number | null;
+    };
 
 /**
  * スタンプを1つ付与する。購読者でない人には押せない（404）。
@@ -320,6 +396,24 @@ export async function grantStamp(
       error: '協賛アカウントはスタンプを押せません',
     };
   }
+  // 認証設定の実施: そのチェックポイントで有効な方法でだけ押せる
+  // （'rotating' の実施は PR-D。ここでは保存済み設定に対する
+  // 'staff' / 'placed' の許可だけを見る）。
+  const method = input.method ?? 'shop-qr';
+  if (method === 'shop-qr' && !input.exhibitor.stampMethods.includes('staff')) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'このチェックポイントでは、お店での読み取りは有効になっていません',
+    };
+  }
+  if (method === 'placed-qr' && !input.exhibitor.stampMethods.includes('placed')) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'このチェックポイントでは、置きQRは有効になっていません',
+    };
+  }
   const event = await getEvent(input.eventId);
   if (!event) {
     return { ok: false, status: 404, error: 'プロジェクトが見つかりません' };
@@ -330,6 +424,19 @@ export async function grantStamp(
       status: 403,
       error: 'このプロジェクトは現在スタンプを受け付けていません',
     };
+  }
+  // 順番モードの実施に使うチェックポイント一覧（番号の判定用）。
+  // モードがオフの間は読まない。
+  let sequentialCheckpoints: SequentialCheckpoint[] | null = null;
+  if (event.sequentialStamps) {
+    const snap = await exhibitorsRef(db, input.eventId).get();
+    sequentialCheckpoints = snap.docs
+      .map((doc) => mapExhibitor(doc.id, doc.data()))
+      .filter((e) => e.kind !== 'advertiser' && !e.closedAt)
+      .map((e) => ({
+        exhibitorId: e.id,
+        checkpointNumber: e.checkpointNumber,
+      }));
   }
   const goalCount = event.stampGoalCount;
   const today = jstDateString(input.now ?? new Date());
@@ -365,6 +472,31 @@ export async function grantStamp(
         status: 409,
         error: 'この周では、すでにこのお店のスタンプを押しています',
       } as GrantStampResult;
+    }
+
+    // 順番モード: 番号順にしか押せない（番号なしは対象外）。
+    if (sequentialCheckpoints) {
+      const stampedExhibitorIds = new Set(
+        allStampsSnap.docs
+          .filter((doc) => Number(doc.data().round ?? 0) === round)
+          .map((doc) => String(doc.data().exhibitorId ?? '')),
+      );
+      const decision = evaluateSequentialStamp({
+        checkpoints: sequentialCheckpoints,
+        stampedExhibitorIds,
+        targetExhibitorId: input.exhibitor.id,
+      });
+      if (!decision.allowed) {
+        return {
+          ok: false,
+          status: decision.reason === 'no-number' ? 403 : 409,
+          error:
+            decision.reason === 'no-number'
+              ? 'このチェックポイントは順番モードの対象外です（番号が設定されていません）'
+              : `順番が違います。次は${decision.nextNumber}番のチェックポイントです`,
+          nextCheckpointNumber: decision.nextNumber,
+        } as GrantStampResult;
+      }
     }
 
     const countInRound =
@@ -566,8 +698,7 @@ export async function cancelStamp(
         status: response.status,
         error: response.error,
       } as CancelStampResult;
-    }
-    tx.delete(stampRef);
+    }    tx.delete(stampRef);
     return { ok: true, stampId: input.stampId } as CancelStampResult;
   });
 }
@@ -614,9 +745,28 @@ export async function getStampCard(
     allStamps.map((s) => s.round),
     event.stampGoalCount,
   );
+  // 表示用に、現在のチェックポイント情報から種別と番号を解決して付ける
+  // （スタンプ記録自体には持たない。対象が消えている場合は付けない）。
+  const exhibitorsSnap = await exhibitorsRef(db, eventId).get();
+  const exhibitorById = new Map(
+    exhibitorsSnap.docs.map((doc) => {
+      const exhibitor = mapExhibitor(doc.id, doc.data());
+      return [exhibitor.id, exhibitor] as const;
+    }),
+  );
   const stamps = allStamps
     .filter((s) => s.round === round)
-    .sort((a, b) => (a.grantedAt ?? '').localeCompare(b.grantedAt ?? ''));
+    .sort((a, b) => (a.grantedAt ?? '').localeCompare(b.grantedAt ?? ''))
+    .map((stamp) => {
+      const exhibitor = exhibitorById.get(stamp.exhibitorId);
+      return exhibitor
+        ? {
+            ...stamp,
+            exhibitorKind: exhibitor.kind,
+            checkpointNumber: exhibitor.checkpointNumber,
+          }
+        : stamp;
+    });
 
   const freeSnap = await freeCouponsRef(db, eventId)
     .where('memberId', '==', memberId)

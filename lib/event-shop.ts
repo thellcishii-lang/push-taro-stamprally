@@ -13,7 +13,9 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import {
   EVENT_EXHIBITORS_COLLECTION,
+  parseCheckpointNumber,
   parseExhibitorKind,
+  type ExhibitorKind,
 } from './event-coupon';
 import { isHttpsUrl, parseTopPlacementPrice } from './event';
 import { geocodeAddress, type GeoPoint, type GeocodeFn } from './geocode';
@@ -120,6 +122,13 @@ export interface PublicShop {
   exhibitorId: string;
   /** 登録名（管理上の名前） */
   name: string;
+  /**
+   * チェックポイントの種別（'shop' = 参加店 / 'spot' = スポット）。
+   * 特設サイトはこの値でスポット表記を出し分ける。協賛は一覧に出ない。
+   */
+  kind: ExhibitorKind;
+  /** チェックポイント番号（未設定は null）。順番モードや表示順の案内に使う */
+  checkpointNumber: number | null;
   profile: ShopProfile;
   /**
    * 特設サイトのトップ掲載（先頭5枠）の対象かどうか（算出済みの真偽値。
@@ -317,6 +326,7 @@ export function toPublicShop(
   exhibitor: { id: string; name: string },
   rawProfile: unknown,
   topFeatured?: unknown,
+  checkpoint?: { kind?: ExhibitorKind; checkpointNumber?: number | null },
 ): PublicShop {
   const profile = parseShopProfile(rawProfile);
   if (!profile.displayName) profile.displayName = exhibitor.name;
@@ -324,6 +334,8 @@ export function toPublicShop(
   return {
     exhibitorId: exhibitor.id,
     name: exhibitor.name,
+    kind: checkpoint?.kind ?? 'shop',
+    checkpointNumber: checkpoint?.checkpointNumber ?? null,
     profile,
     topFeatured: topFeatured === true,
   };
@@ -768,8 +780,10 @@ export async function listPublicShops(
     .collection(EVENT_EXHIBITORS_COLLECTION)
     .get();
   return snap.docs
-    // 協賛（広告専用）アカウントは参加店の一覧には出さない
-    .filter((doc) => parseExhibitorKind(doc.data().kind) === 'shop')
+    // 協賛（広告専用）アカウントは参加店の一覧には出さない。
+    // スポット（チェックポイント専用）は kind を付けて一覧に出す
+    // （特設サイト側がスポット表記で出す）。
+    .filter((doc) => parseExhibitorKind(doc.data().kind) !== 'advertiser')
     .map((doc) => ({
       shop: toPublicShop(
         { id: doc.id, name: String(doc.data().name ?? '') },
@@ -779,6 +793,10 @@ export async function listPublicShops(
           topFeatured: doc.data().topFeatured,
           placementOptIn: doc.data().placementOptIn,
         }),
+        {
+          kind: parseExhibitorKind(doc.data().kind),
+          checkpointNumber: parseCheckpointNumber(doc.data().checkpointNumber),
+        },
       ),
       billingSuspended: doc.data().billingSuspended,
     }))

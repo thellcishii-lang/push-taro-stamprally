@@ -108,10 +108,11 @@ export default function EventCouponListPrintPage() {
       const exData = await exRes.json();
       const cpData = await cpRes.json();
       setEventName(typeof evData.event?.name === 'string' ? evData.event.name : '');
-      // 協賛（広告専用）アカウントはクーポンを持たないため印刷対象にしない
+      // 協賛（広告専用）とスポット（チェックポイント専用）はクーポンを
+      // 持たないため印刷対象にしない
       setExhibitors(
         (exData.exhibitors ?? []).filter(
-          (e: { kind?: string }) => e.kind !== 'advertiser',
+          (e: { kind?: string }) => (e.kind ?? 'shop') === 'shop',
         ),
       );
       setCoupons(cpData.coupons ?? []);

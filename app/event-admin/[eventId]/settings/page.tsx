@@ -144,6 +144,7 @@ export default function EventSettingsAdminPage() {
   const [stampGoalCount, setStampGoalCount] = useState(5);
   const [stampRewardType, setStampRewardType] = useState<'free-dish' | 'benefit'>('free-dish');
   const [stampBenefitText, setStampBenefitText] = useState('');
+  const [sequentialStamps, setSequentialStamps] = useState(false);
   const [stampGoalMessage, setStampGoalMessage] = useState('');
   const [stampGoalSaving, setStampGoalSaving] = useState(false);
   const [rankingMinReviews, setRankingMinReviews] = useState(3);
@@ -224,6 +225,9 @@ export default function EventSettingsAdminPage() {
       }
       if (typeof data.event?.stampBenefitText === 'string') {
         setStampBenefitText(data.event.stampBenefitText);
+      }
+      if (typeof data.event?.sequentialStamps === 'boolean') {
+        setSequentialStamps(data.event.sequentialStamps);
       }
       if (typeof data.event?.rankingMinReviews === 'number') {
         setRankingMinReviews(data.event.rankingMinReviews);
@@ -309,7 +313,7 @@ export default function EventSettingsAdminPage() {
     try {
       const data = await callApi(`/api/events/${eventId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ stampGoalCount, stampRewardType, stampBenefitText }),
+        body: JSON.stringify({ stampGoalCount, stampRewardType, stampBenefitText, sequentialStamps }),
       });
       if (typeof data.event?.stampGoalCount === 'number') {
         setStampGoalCount(data.event.stampGoalCount);
@@ -321,6 +325,9 @@ export default function EventSettingsAdminPage() {
       }
       if (typeof data.event?.stampBenefitText === 'string') {
         setStampBenefitText(data.event.stampBenefitText);
+      }
+      if (typeof data.event?.sequentialStamps === 'boolean') {
+        setSequentialStamps(data.event.sequentialStamps);
       }
       setStampGoalMessage(adminText(locale, 'stampGoalSaved'));
     } catch (e) {
@@ -731,6 +738,28 @@ export default function EventSettingsAdminPage() {
           )}
           <p style={{ fontSize: 12.5, color: '#64748b', margin: '12px 0 0' }}>
             {adminText(locale, 'stampRewardNote')}
+          </p>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              marginTop: 20,
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={sequentialStamps}
+              onChange={(e) => setSequentialStamps(e.target.checked)}
+              style={{ width: 18, height: 18 }}
+            />
+            {adminText(locale, 'sequentialStampsLabel')}
+          </label>
+          <p style={{ fontSize: 12.5, color: '#64748b', margin: '8px 0 0' }}>
+            {adminText(locale, 'sequentialStampsNote')}
           </p>
           <button
             onClick={() => void handleSaveStampGoal()}

@@ -162,6 +162,10 @@ interface MemberStampCard {
     exhibitorId: string;
     exhibitorName: string;
     round: number;
+    /** チェックポイントの種別（'spot' のときスポット表記を出す） */
+    exhibitorKind?: string;
+    /** チェックポイント番号（未設定は null） */
+    checkpointNumber?: number | null;
   }>;
   freeCoupons: MemberFreeCoupon[];
 }
@@ -2488,13 +2492,64 @@ export default function EventVisitorPage() {
                         {stamp ? (
                           <span
                             style={{
-                              fontSize: 12,
-                              fontWeight: 700,
-                              color: VIOLET,
-                              wordBreak: 'break-all',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 3,
                             }}
                           >
-                            {stamp.exhibitorName}
+                            <span
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: VIOLET,
+                                wordBreak: 'break-all',
+                              }}
+                            >
+                              {stamp.exhibitorName}
+                            </span>
+                            {(stamp.exhibitorKind === 'spot' ||
+                              typeof stamp.checkpointNumber === 'number') && (
+                              <span
+                                style={{
+                                  display: 'flex',
+                                  gap: 4,
+                                  flexWrap: 'wrap',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                {typeof stamp.checkpointNumber === 'number' && (
+                                  <span
+                                    style={{
+                                      fontSize: 10.5,
+                                      fontWeight: 700,
+                                      padding: '1px 7px',
+                                      borderRadius: 999,
+                                      backgroundColor: '#E0F2FE',
+                                      color: '#0369a1',
+                                    }}
+                                  >
+                                    {uiText(locale, 'checkpointNumberBadge', {
+                                      number: String(stamp.checkpointNumber),
+                                    })}
+                                  </span>
+                                )}
+                                {stamp.exhibitorKind === 'spot' && (
+                                  <span
+                                    style={{
+                                      fontSize: 10.5,
+                                      fontWeight: 700,
+                                      padding: '1px 7px',
+                                      borderRadius: 999,
+                                      backgroundColor: '#FEF3C7',
+                                      color: '#92400e',
+                                    }}
+                                  >
+                                    {uiText(locale, 'stampSpotBadge')}
+                                  </span>
+                                )}
+                              </span>
+                            )}
                           </span>
                         ) : (
                           <span style={{ fontSize: 16, color: '#cbd5e1', fontWeight: 800 }}>

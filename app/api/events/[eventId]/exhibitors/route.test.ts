@@ -10,8 +10,11 @@ const mocks = vi.hoisted(() => ({
   requireEventOwner: vi.fn(),
   listExhibitors: vi.fn(),
   ensureExhibitorStampCode: vi.fn(),
+  createExhibitor: vi.fn(),
   registerExhibitor: vi.fn(),
   findOrganizerByOwnerUid: vi.fn(),
+  validateShopProfileInput: vi.fn(),
+  updateShopProfile: vi.fn(),
 }));
 
 vi.mock('@/lib/event-auth', () => ({
@@ -20,12 +23,19 @@ vi.mock('@/lib/event-auth', () => ({
 vi.mock('@/lib/organizers', () => ({
   findOrganizerByOwnerUid: mocks.findOrganizerByOwnerUid,
 }));
+vi.mock('@/lib/firebase-admin', () => ({ db: {} }));
 vi.mock('@/lib/event-coupon', () => ({
   listExhibitors: mocks.listExhibitors,
   ensureExhibitorStampCode: mocks.ensureExhibitorStampCode,
-  // 実装と同じ規則（'advertiser' のみ協賛、それ以外は参加店）
+  createExhibitor: mocks.createExhibitor,
+  // 実装と同じ規則（'advertiser' のみ協賛、'spot' のみスポット、
+  // それ以外は参加店）
   parseExhibitorKind: (value: unknown) =>
-    value === 'advertiser' ? 'advertiser' : 'shop',
+    value === 'advertiser' ? 'advertiser' : value === 'spot' ? 'spot' : 'shop',
+}));
+vi.mock('@/lib/event-shop', () => ({
+  validateShopProfileInput: mocks.validateShopProfileInput,
+  updateShopProfile: mocks.updateShopProfile,
 }));
 vi.mock('@/lib/exhibitor-access', () => ({
   ExhibitorAccessError: class ExhibitorAccessError extends Error {
@@ -94,6 +104,34 @@ beforeEach(() => {
     email: EMAIL,
     mailSent: true,
   });
+  mocks.createExhibitor.mockResolvedValue({
+    id: 'spot-1',
+    name: '展望台',
+    email: null,
+    address: null,
+    hasAccessCode: false,
+    lang: 'ja',
+    kind: 'spot',
+    source: 'admin',
+    delistedAt: null,
+    closedAt: null,
+    stampCode: 'ABCDEFGHJKMNPQRSTUVW',
+    checkpointNumber: null,
+    stampMethods: ['placed'],
+    gpsCheck: false,
+    velocityCheck: false,
+  });
+  // プロフィール検証は、住所と説明だけを拾う最小の形で再現する。
+  mocks.validateShopProfileInput.mockImplementation(
+    (raw: Record<string, unknown>) => ({
+      ok: true,
+      value: {
+        address: typeof raw.address === 'string' ? raw.address : '',
+        description: typeof raw.description === 'string' ? raw.description : '',
+      },
+    }),
+  );
+  mocks.updateShopProfile.mockResolvedValue({ ok: true, profile: {} });
 });
 
 describe('POST /api/events/[eventId]/exhibitors', () => {
@@ -169,6 +207,38 @@ describe('POST /api/events/[eventId]/exhibitors', () => {
     expect(response.status).toBe(201);
     expect(mocks.registerExhibitor).toHaveBeenCalledWith(
       expect.objectContaining({ address: ADDRESS }),
+    );
+  });
+
+  it('スポットはメールなしで登録でき、アクセスコード発行を通らない', async () => {
+    const response = await POST(
+      postRequest({
+        name: '展望台',
+        kind: 'spot',
+        address: ADDRESS,
+        description: '街が見渡せる展望台',
+      }),
+      { params: Promise.resolve({ eventId: EVENT_ID }) },
+    );
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body.exhibitor.kind).toBe('spot');
+    expect(body.exhibitor.email).toBeNull();
+    // アクセスコード＋メール送信の経路は通らない
+    expect(mocks.registerExhibitor).not.toHaveBeenCalled();
+    expect(mocks.createExhibitor).toHaveBeenCalledWith(
+      EVENT_ID,
+      expect.objectContaining({ name: '展望台', kind: 'spot' }),
+    );
+    // 説明・住所は公開プロフィールとして保存される
+    expect(mocks.updateShopProfile).toHaveBeenCalledWith(
+      expect.anything(),
+      EVENT_ID,
+      'spot-1',
+      expect.objectContaining({
+        address: ADDRESS,
+        description: '街が見渡せる展望台',
+      }),
     );
   });
 });

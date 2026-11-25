@@ -38,9 +38,10 @@ export async function GET(
   const summary = summarizePaymentsByMonth(allPayments, new Date());
 
   return NextResponse.json({
-    // 店舗課金は参加店だけが対象（協賛は広告専用で、ここには出さない）
+    // 店舗課金は参加店だけが対象（協賛は広告専用、スポットはチェック
+    // ポイント専用で、どちらもここには出さない）
     exhibitors: exhibitors
-      .filter((exhibitor) => exhibitor.kind !== 'advertiser')
+      .filter((exhibitor) => exhibitor.kind === 'shop')
       .map((exhibitor) => ({
         id: exhibitor.id,
         name: exhibitor.name,

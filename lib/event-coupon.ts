@@ -34,13 +34,18 @@ export const EVENT_COUPONS_COLLECTION = 'coupons';
  *   トップ掲載など、参加店としての全機能の対象）
  * - 'advertiser': 協賛（広告専用）。参加店としては一切現れず、
  *   広告の掲載だけを行う。
+ * - 'spot': スポット（チェックポイント専用）。ログイン・アクセス
+ *   コード・消込・クーポン発行を持たず、主催者が登録した場所に
+ *   置きQRを置いて、お客さんが通過時に自分で読んでスタンプを付ける。
  * 旧ドキュメント（項目なし）は 'shop' として扱う。
  */
-export type ExhibitorKind = 'shop' | 'advertiser';
+export type ExhibitorKind = 'shop' | 'advertiser' | 'spot';
 
-/** 保存済みの種類を防御的に読む（読み取り用）。'advertiser' のみ協賛。 */
+/** 保存済みの種類を防御的に読む（読み取り用）。'advertiser' のみ協賛、'spot' のみスポット。 */
 export function parseExhibitorKind(value: unknown): ExhibitorKind {
-  return value === 'advertiser' ? 'advertiser' : 'shop';
+  if (value === 'advertiser') return 'advertiser';
+  if (value === 'spot') return 'spot';
+  return 'shop';
 }
 
 /**
@@ -54,6 +59,108 @@ export type ExhibitorSource = 'admin' | 'self';
 /** 保存済みの登録入口を防御的に読む（読み取り用）。'self' のみ自己申込。 */
 export function parseExhibitorSource(value: unknown): ExhibitorSource {
   return value === 'self' ? 'self' : 'admin';
+}
+
+/**
+ * チェックポイントのスタンプ認証方法（チェックポイントごとに複数選択可。
+ * チェックした方法だけがそのチェックポイントで有効になる）。
+ * - 'staff': 店が読む（お店・スタッフがお客さんのQRを読み取る）
+ * - 'placed': 置きQR（お客さんが静止QRを読み取る）
+ * - 'rotating': 回転QR（お客さんが固定ディスプレイの回転QRを読み取る。
+ *   実施は PR-D で、ここでは設定の保存・表示まで）
+ */
+export type CheckpointStampMethod = 'staff' | 'placed' | 'rotating';
+
+/** 認証方法の全種（表示順・正規化の走査順）。 */
+export const CHECKPOINT_STAMP_METHODS: readonly CheckpointStampMethod[] = [
+  'staff',
+  'placed',
+  'rotating',
+];
+
+/** チェックポイント番号として有効な値かどうか（1以上の整数）。 */
+export function isValidCheckpointNumber(value: unknown): boolean {
+  return (
+    typeof value === 'number' && Number.isInteger(value) && value >= 1
+  );
+}
+
+/**
+ * 保存済みのチェックポイント番号を防御的に読む（読み取り用）。
+ * 未設定・不正な値は null（番号なし）。
+ */
+export function parseCheckpointNumber(value: unknown): number | null {
+  return isValidCheckpointNumber(value) ? (value as number) : null;
+}
+
+/** 種別ごとの認証方法の既定値（項目が無い旧ドキュメント向け）。 */
+export function defaultStampMethods(
+  kind: ExhibitorKind,
+): CheckpointStampMethod[] {
+  if (kind === 'spot') return ['placed'];
+  if (kind === 'shop') return ['staff'];
+  return [];
+}
+
+/**
+ * 保存済みの認証方法を防御的に読む（読み取り用。throw しない）。
+ * 項目が無い旧ドキュメントは種別の既定値に倒す。配列があれば
+ * 有効な値だけを残す（空配列は「どの方法も無効」として尊重する）。
+ */
+export function parseStampMethods(
+  value: unknown,
+  kind: ExhibitorKind,
+): CheckpointStampMethod[] {
+  if (!Array.isArray(value)) return defaultStampMethods(kind);
+  return CHECKPOINT_STAMP_METHODS.filter((method) => value.includes(method));
+}
+
+/**
+ * 認証方法の入力を検証して正規化する（書き込み用。不正なら throw）。
+ * 1つ以上必須（0件ではそのチェックポイントでスタンプが押せなくなる）。
+ */
+export function normalizeStampMethods(
+  input: unknown,
+): CheckpointStampMethod[] {
+  if (!Array.isArray(input)) {
+    throw new Error('スタンプの認証方法の形式が不正です');
+  }
+  const methods = CHECKPOINT_STAMP_METHODS.filter((method) =>
+    input.includes(method),
+  );
+  if (methods.length === 0) {
+    throw new Error('スタンプの認証方法を1つ以上選んでください');
+  }
+  return methods;
+}
+
+/**
+ * チェックポイント番号の重複相手を探す（純粋関数）。
+ * 同一イベント内で、閉店扱いでも協賛でもない他のチェックポイントが
+ * 同じ番号を持っていれば、その相手を返す。重複が無ければ null。
+ */
+export function findCheckpointNumberConflict(
+  exhibitors: Array<
+    Pick<
+      EventExhibitor,
+      'id' | 'name' | 'kind' | 'closedAt' | 'checkpointNumber'
+    >
+  >,
+  exhibitorId: string,
+  checkpointNumber: number,
+): Pick<
+  EventExhibitor,
+  'id' | 'name' | 'kind' | 'closedAt' | 'checkpointNumber'
+> | null {
+  return (
+    exhibitors.find(
+      (other) =>
+        other.id !== exhibitorId &&
+        !other.closedAt &&
+        other.kind !== 'advertiser' &&
+        other.checkpointNumber === checkpointNumber,
+    ) ?? null
+  );
 }
 
 export interface EventExhibitor {
@@ -91,12 +198,35 @@ export interface EventExhibitor {
    */
   closedAt: string | null;
   /**
-   * 場所QR（チェックポイントに貼る QR）用のスタンプコード。参加店だけが
-   * 持ち、作成時に自動発行される。導入前の旧ドキュメントは null で、
-   * 主催者コンソールの表示時に遅延発行される（ensureExhibitorStampCode）。
-   * 協賛アカウントは常に null。
+   * 場所QR（チェックポイントに貼る QR）用のスタンプコード。参加店と
+   * スポットだけが持ち、作成時に自動発行される。導入前の旧ドキュメント
+   * は null で、主催者コンソールの表示時に遅延発行される
+   * （ensureExhibitorStampCode）。協賛アカウントは常に null。
    */
   stampCode: string | null;
+  /**
+   * チェックポイント番号（任意）。順番モードや特設サイト・参加者画面
+   * での表示に使う。同一イベント内で重複は許さない（保存時に検証）。
+   * 未設定・旧ドキュメントは null。
+   */
+  checkpointNumber: number | null;
+  /**
+   * このチェックポイントで有効なスタンプ認証方法（複数選択可）。
+   * 項目が無い旧ドキュメントは種別の既定値（参加店='staff'、
+   * スポット='placed'、協賛=なし）に倒す。
+   */
+  stampMethods: CheckpointStampMethod[];
+  /**
+   * お客さんが読み取る方法（置きQR・回転QR）のときの追加チェック:
+   * 端末GPSでスポットから50m以内かを判定するか。既定オフ。
+   * 判定の実施は PR-D（ここでは設定の保存・表示まで）。
+   */
+  gpsCheck: boolean;
+  /**
+   * お客さんが読み取る方法のときの追加チェック: 移動速度チェックを
+   * 行うか。既定オフ。判定の実施は PR-D。
+   */
+  velocityCheck: boolean;
 }
 
 export function mapExhibitor(
@@ -124,6 +254,13 @@ export function mapExhibitor(
         ? data.closedAt
         : null,
     stampCode: isValidStampCode(data.stampCode) ? data.stampCode : null,
+    checkpointNumber: parseCheckpointNumber(data.checkpointNumber),
+    stampMethods: parseStampMethods(
+      data.stampMethods,
+      parseExhibitorKind(data.kind),
+    ),
+    gpsCheck: data.gpsCheck === true,
+    velocityCheck: data.velocityCheck === true,
   };
 }
 
@@ -389,6 +526,8 @@ export async function createExhibitor(
     kind?: ExhibitorKind;
     /** 登録の入口。未指定は主催者発行（'admin'） */
     source?: ExhibitorSource;
+    /** チェックポイント番号（任意）。重複チェックは呼び出し側の設定更新で行う */
+    checkpointNumber?: number | null;
     /**
      * ドキュメントIDを呼び出し側で先に決める場合に指定する。
      * 自己申込では、支払い確認前に課金レコードを同じ ID で作るため、
@@ -406,6 +545,7 @@ export async function createExhibitor(
   const email = input.email?.trim().toLowerCase() || null;
   const address = input.address?.trim() || null;
   const kind = input.kind ?? 'shop';
+  const checkpointNumber = parseCheckpointNumber(input.checkpointNumber);
   const exhibitor: EventExhibitor = {
     id: ref.id,
     name,
@@ -417,9 +557,16 @@ export async function createExhibitor(
     source: input.source ?? 'admin',
     delistedAt: null,
     closedAt: null,
-    // 場所QR用のスタンプコードは参加店だけに作成時自動発行する
-    // （協賛はチェックポイントではないため持たない）。
-    stampCode: kind === 'shop' ? generateStampCode() : null,
+    // 場所QR用のスタンプコードはチェックポイント（参加店・スポット）
+    // だけに作成時自動発行する（協賛はチェックポイントではないため
+    // 持たない）。
+    stampCode: kind === 'shop' || kind === 'spot' ? generateStampCode() : null,
+    checkpointNumber,
+    // 認証方法は種別の既定値で始める（コンソールで後から変更できる）。
+    // 追加チェックは既定オフ。
+    stampMethods: defaultStampMethods(kind),
+    gpsCheck: false,
+    velocityCheck: false,
   };
   // hasAccessCode / delistedAt / closedAt はドキュメントの実フィールドから
   // 導く表示用の値で、作成時に保存するのは実フィールド（email / address /
@@ -451,16 +598,16 @@ export async function getExhibitor(
 // ─── 場所QRコード（スタンプ認証） ───
 
 /**
- * スタンプコードが無ければ発行して返す（遅延発行）。導入前の旧参加店
- * ドキュメント向けで、主催者コンソールの表示時に呼ばれる。協賛・閉店
- * 扱いのアカウントには発行しない（null）。
+ * スタンプコードが無ければ発行して返す（遅延発行）。導入前の旧参加店・
+ * スポットドキュメント向けで、主催者コンソールの表示時に呼ばれる。
+ * 協賛・閉店扱いのアカウントには発行しない（null）。
  */
 export async function ensureExhibitorStampCode(
   eventId: string,
   exhibitor: EventExhibitor,
 ): Promise<string | null> {
   if (exhibitor.stampCode) return exhibitor.stampCode;
-  if (exhibitor.kind !== 'shop' || exhibitor.closedAt) return null;
+  if (exhibitor.kind === 'advertiser' || exhibitor.closedAt) return null;
   const stampCode = generateStampCode();
   await exhibitorsRef(eventId)
     .doc(exhibitor.id)
@@ -477,10 +624,116 @@ export async function regenerateExhibitorStampCode(
   exhibitorId: string,
 ): Promise<string | null> {
   const exhibitor = await getExhibitor(eventId, exhibitorId);
-  if (!exhibitor || exhibitor.kind !== 'shop') return null;
+  if (!exhibitor || exhibitor.kind === 'advertiser') return null;
   const stampCode = generateStampCode();
   await exhibitorsRef(eventId).doc(exhibitorId).update({ stampCode });
   return stampCode;
+}
+
+// ─── チェックポイント設定（番号・認証方法・追加チェック） ───
+
+export type UpdateExhibitorCheckpointSettingsResult =
+  | { ok: true; exhibitor: EventExhibitor }
+  | { ok: false; status: number; error: string };
+
+/**
+ * チェックポイント設定（番号・認証方法・追加チェック）を更新する。
+ * 対象は参加店とスポットだけ（協賛にはチェックポイント設定が無い）。
+ * 番号は同一イベント内で重複を許さない（閉店扱い・協賛は対象外）。
+ * 指定された項目だけを更新する（undefined の項目は触らない）。
+ */
+export async function updateExhibitorCheckpointSettings(
+  eventId: string,
+  exhibitorId: string,
+  input: {
+    checkpointNumber?: number | null;
+    stampMethods?: unknown;
+    gpsCheck?: unknown;
+    velocityCheck?: unknown;
+  },
+): Promise<UpdateExhibitorCheckpointSettingsResult> {
+  const exhibitor = await getExhibitor(eventId, exhibitorId);
+  if (!exhibitor) {
+    return { ok: false, status: 404, error: 'チェックポイントが見つかりません' };
+  }
+  if (exhibitor.kind === 'advertiser') {
+    return {
+      ok: false,
+      status: 400,
+      error: '協賛アカウントにはチェックポイント設定はありません',
+    };
+  }
+  const patch: Record<string, unknown> = {};
+  if (input.checkpointNumber !== undefined) {
+    if (
+      input.checkpointNumber !== null &&
+      !isValidCheckpointNumber(input.checkpointNumber)
+    ) {
+      return {
+        ok: false,
+        status: 400,
+        error: 'チェックポイント番号は1以上の整数で指定してください',
+      };
+    }
+    if (input.checkpointNumber !== null) {
+      const conflict = findCheckpointNumberConflict(
+        await listExhibitors(eventId),
+        exhibitorId,
+        input.checkpointNumber,
+      );
+      if (conflict) {
+        return {
+          ok: false,
+          status: 409,
+          error: `番号${input.checkpointNumber}は「${conflict.name}」で既に使われています`,
+        };
+      }
+    }
+    patch.checkpointNumber = input.checkpointNumber;
+  }
+  if (input.stampMethods !== undefined) {
+    try {
+      patch.stampMethods = normalizeStampMethods(input.stampMethods);
+    } catch (error) {
+      return {
+        ok: false,
+        status: 400,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'スタンプの認証方法の形式が不正です',
+      };
+    }
+  }
+  if (input.gpsCheck !== undefined) {
+    if (typeof input.gpsCheck !== 'boolean') {
+      return {
+        ok: false,
+        status: 400,
+        error: 'GPSチェックの設定形式が不正です',
+      };
+    }
+    patch.gpsCheck = input.gpsCheck;
+  }
+  if (input.velocityCheck !== undefined) {
+    if (typeof input.velocityCheck !== 'boolean') {
+      return {
+        ok: false,
+        status: 400,
+        error: '移動速度チェックの設定形式が不正です',
+      };
+    }
+    patch.velocityCheck = input.velocityCheck;
+  }
+  if (Object.keys(patch).length === 0) {
+    return { ok: false, status: 400, error: '変更項目がありません' };
+  }
+  await exhibitorsRef(eventId).doc(exhibitorId).update(patch);
+  const updated = await getExhibitor(eventId, exhibitorId);
+  if (!updated) {
+    return { ok: false, status: 404, error: 'チェックポイントが見つかりません' };
+  }
+  return { ok: true, exhibitor: updated };
 }
 
 // ─── クーポン ───
@@ -521,6 +774,9 @@ export async function createCoupon(
   if (!exhibitor) throw new Error('出店者が見つかりません');
   if (exhibitor.kind === 'advertiser') {
     throw new Error('協賛アカウントにはクーポンを登録できません');
+  }
+  if (exhibitor.kind === 'spot') {
+    throw new Error('スポットにはクーポンを登録できません');
   }
   const title = input.title.trim();
   if (!title) throw new Error('クーポンのタイトルが必要です');

@@ -185,10 +185,11 @@ export default function EventDashboardPage() {
     try {
       const data = await callApi(`/api/events/${eventId}/exhibitors`);
       if (Array.isArray(data.exhibitors)) {
-        // 参加店数には協賛（広告専用）アカウントを含めない
+        // 参加店数には協賛（広告専用）とスポット（チェックポイント専用）
+        // を含めない
         setShopCount(
           data.exhibitors.filter(
-            (e: { kind?: string }) => e.kind !== 'advertiser',
+            (e: { kind?: string }) => (e.kind ?? 'shop') === 'shop',
           ).length,
         );
       }

@@ -47,10 +47,18 @@ interface Exhibitor {
   name: string;
   email: string | null;
   hasAccessCode: boolean;
-  /** アカウントの種類（'shop' = 参加店 / 'advertiser' = 協賛）。旧データは未設定 */
+  /** アカウントの種類（'shop' = 参加店 / 'advertiser' = 協賛 / 'spot' = スポット）。旧データは未設定 */
   kind?: string;
   /** 場所QR用スタンプコード（主催者コンソール表示時に遅延発行される） */
   stampCode?: string | null;
+  /** チェックポイント番号（未設定は null） */
+  checkpointNumber?: number | null;
+  /** 有効なスタンプ認証方法 */
+  stampMethods?: string[];
+  /** GPSエリアチェック（追加チェック） */
+  gpsCheck?: boolean;
+  /** 移動速度チェック（追加チェック） */
+  velocityCheck?: boolean;
 }
 
 interface Coupon {
@@ -162,7 +170,8 @@ export default function EventCouponAdminPage() {
   // 店舗課金オプションが有効な契約では登録時に住所が必須になる
   // （GET /exhibitors の billingAddressRequired で出し分ける）。
   const [billingAddressRequired, setBillingAddressRequired] = useState(false);
-  const [exhibitorKind, setExhibitorKind] = useState<'shop' | 'advertiser'>('shop');
+  const [exhibitorKind, setExhibitorKind] = useState<'shop' | 'advertiser' | 'spot'>('shop');
+  const [exhibitorDescription, setExhibitorDescription] = useState('');
   const [couponForm, setCouponForm] = useState({
     exhibitorId: '',
     title: '',
@@ -269,22 +278,37 @@ export default function EventCouponAdminPage() {
     setExhibitorMessage('');
     setExhibitorMailWarning('');
     try {
+      const isSpot = exhibitorKind === 'spot';
       const result = await callApi(`/api/events/${eventId}/exhibitors`, {
         method: 'POST',
-        body: JSON.stringify({
-          name: exhibitorName,
-          email: exhibitorEmail,
-          ...(billingAddressRequired
-            ? { address: exhibitorAddress.trim() }
-            : {}),
-          kind: exhibitorKind,
-        }),
+        body: JSON.stringify(
+          isSpot
+            ? {
+                // スポットはメール・パスワードを持たない。住所と説明は
+                // 公開プロフィール（地図・特設サイト表示用）として渡す。
+                name: exhibitorName,
+                kind: 'spot',
+                address: exhibitorAddress.trim(),
+                description: exhibitorDescription.trim(),
+              }
+            : {
+                name: exhibitorName,
+                email: exhibitorEmail,
+                ...(billingAddressRequired
+                  ? { address: exhibitorAddress.trim() }
+                  : {}),
+                kind: exhibitorKind,
+              },
+        ),
       });
       setExhibitorName('');
       setExhibitorEmail('');
       setExhibitorAddress('');
+      setExhibitorDescription('');
       setExhibitorKind('shop');
-      if (result?.mailSent === false) {
+      if (isSpot) {
+        setExhibitorMessage(adminText(locale, 'exhibitorAddedSpot'));
+      } else if (result?.mailSent === false) {
         // 登録は成立しているがパスワードメールが送れていない。「送信しました」
         // という成功文は出さず、警告だけを出す（警告文自体が登録の成立も伝える）。
         setExhibitorMailWarning(adminText(locale, 'exhibitorAddedMailFailed'));
@@ -390,6 +414,93 @@ export default function EventCouponAdminPage() {
       );
     } finally {
       setStampBusy(false);
+    }
+  };
+
+  // ─── チェックポイント設定（番号・認証方法・追加チェック） ───
+  // 参加店・スポットを1つ選び、そのチェックポイント設定を編集する。
+  const [cpTargetId, setCpTargetId] = useState('');
+  const [cpNumber, setCpNumber] = useState('');
+  const [cpMethods, setCpMethods] = useState<string[]>(['staff']);
+  const [cpGpsCheck, setCpGpsCheck] = useState(false);
+  const [cpVelocityCheck, setCpVelocityCheck] = useState(false);
+  const [cpMessage, setCpMessage] = useState('');
+  const [cpBusy, setCpBusy] = useState(false);
+  const cpTarget =
+    shopExhibitors.find((e) => e.id === cpTargetId) ?? shopExhibitors[0] ?? null;
+
+  // 対象が変わったら、そのチェックポイントの保存済み設定をフォームに写す。
+  const cpLoadedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!cpTarget) return;
+    if (cpLoadedForRef.current === cpTarget.id) return;
+    cpLoadedForRef.current = cpTarget.id;
+    setCpNumber(
+      typeof cpTarget.checkpointNumber === 'number'
+        ? String(cpTarget.checkpointNumber)
+        : '',
+    );
+    setCpMethods(
+      Array.isArray(cpTarget.stampMethods) && cpTarget.stampMethods.length > 0
+        ? cpTarget.stampMethods
+        : cpTarget.kind === 'spot'
+          ? ['placed']
+          : ['staff'],
+    );
+    setCpGpsCheck(cpTarget.gpsCheck === true);
+    setCpVelocityCheck(cpTarget.velocityCheck === true);
+    setCpMessage('');
+  }, [cpTarget]);
+
+  const toggleCpMethod = (method: string) => {
+    setCpMethods((prev) =>
+      prev.includes(method)
+        ? prev.filter((m) => m !== method)
+        : [...prev, method],
+    );
+  };
+
+  const handleSaveCheckpointSettings = async () => {
+    if (!cpTarget) return;
+    const numberText = cpNumber.trim();
+    const checkpointNumber = numberText === '' ? null : Number(numberText);
+    if (
+      checkpointNumber !== null &&
+      (!Number.isInteger(checkpointNumber) || checkpointNumber < 1)
+    ) {
+      setCpMessage(adminText(locale, 'checkpointNumberInvalid'));
+      return;
+    }
+    setCpBusy(true);
+    setCpMessage('');
+    try {
+      const result = await callApi(
+        `/api/events/${eventId}/exhibitors/${cpTarget.id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            checkpointNumber,
+            stampMethods: cpMethods,
+            gpsCheck: cpGpsCheck,
+            velocityCheck: cpVelocityCheck,
+          }),
+        },
+      );
+      if (result?.exhibitor) {
+        setExhibitors((prev) =>
+          prev.map((e) => (e.id === cpTarget.id ? result.exhibitor : e)),
+        );
+        cpLoadedForRef.current = null;
+      }
+      setCpMessage(adminText(locale, 'checkpointSettingsSaved'));
+    } catch (e) {
+      setCpMessage(
+        e instanceof Error
+          ? e.message
+          : adminText(locale, 'checkpointSettingsSaveFailed'),
+      );
+    } finally {
+      setCpBusy(false);
     }
   };
 
@@ -604,6 +715,40 @@ export default function EventCouponAdminPage() {
                           {adminText(locale, 'adsKindSponsor')}
                         </span>
                       )}
+                      {exhibitor.kind === 'spot' && (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            marginLeft: 8,
+                            padding: '2px 10px',
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            borderRadius: 999,
+                            backgroundColor: '#FEF3C7',
+                            color: '#92400e',
+                            verticalAlign: 'middle',
+                          }}
+                        >
+                          {adminText(locale, 'spotBadge')}
+                        </span>
+                      )}
+                      {typeof exhibitor.checkpointNumber === 'number' && (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            marginLeft: 8,
+                            padding: '2px 10px',
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            borderRadius: 999,
+                            backgroundColor: '#E0F2FE',
+                            color: '#0369a1',
+                            verticalAlign: 'middle',
+                          }}
+                        >
+                          {exhibitor.checkpointNumber}
+                        </span>
+                      )}
                     </span>
                     <span
                       style={{
@@ -618,43 +763,47 @@ export default function EventCouponAdminPage() {
                       {exhibitor.email ?? ''}
                     </span>
                   </span>
-                  <span
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span style={linkBadgeStyle(exhibitor.hasAccessCode)}>
-                      {exhibitor.hasAccessCode
-                        ? adminText(locale, 'exhibitorHasPassword')
-                        : adminText(locale, 'exhibitorNoPassword')}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        // 行タップの絞り込みに伝播させない（従来どおり再発行だけを行う）。
-                        e.stopPropagation();
-                        void handleReissueExhibitor(exhibitor);
-                      }}
-                      disabled={busy}
+                  {/* スポットはログインを持たないため、パスワードの状態も
+                      再発行も出さない */}
+                  {exhibitor.kind !== 'spot' && (
+                    <span
                       style={{
-                        padding: '5px 12px',
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        borderRadius: 999,
-                        border: '1px solid #E8DCC4',
-                        backgroundColor: '#ffffff',
-                        color: VIOLET,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        opacity: busy ? 0.6 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flexShrink: 0,
                       }}
                     >
-                      {reissuingId === exhibitor.id && <ButtonSpinner />}
-                      {adminText(locale, 'exhibitorReissueButton')}
-                    </button>
-                  </span>
+                      <span style={linkBadgeStyle(exhibitor.hasAccessCode)}>
+                        {exhibitor.hasAccessCode
+                          ? adminText(locale, 'exhibitorHasPassword')
+                          : adminText(locale, 'exhibitorNoPassword')}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          // 行タップの絞り込みに伝播させない（従来どおり再発行だけを行う）。
+                          e.stopPropagation();
+                          void handleReissueExhibitor(exhibitor);
+                        }}
+                        disabled={busy}
+                        style={{
+                          padding: '5px 12px',
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          borderRadius: 999,
+                          border: '1px solid #E8DCC4',
+                          backgroundColor: '#ffffff',
+                          color: VIOLET,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          opacity: busy ? 0.6 : 1,
+                        }}
+                      >
+                        {reissuingId === exhibitor.id && <ButtonSpinner />}
+                        {adminText(locale, 'exhibitorReissueButton')}
+                      </button>
+                    </span>
+                  )}
                 </div>
               ))}
               {matchedExhibitors.length === 0 && (
@@ -694,11 +843,25 @@ export default function EventCouponAdminPage() {
             {adminText(locale, 'exhibitorNameLabel')}
             <input style={inputStyle} value={exhibitorName} onChange={(e) => setExhibitorName(e.target.value)} />
           </label>
-          <label style={labelStyle}>
-            {adminText(locale, 'exhibitorEmailLabel')}
-            <input style={inputStyle} type="email" value={exhibitorEmail} onChange={(e) => setExhibitorEmail(e.target.value)} />
-          </label>
-          {billingAddressRequired && (
+          {exhibitorKind !== 'spot' && (
+            <label style={labelStyle}>
+              {adminText(locale, 'exhibitorEmailLabel')}
+              <input style={inputStyle} type="email" value={exhibitorEmail} onChange={(e) => setExhibitorEmail(e.target.value)} />
+            </label>
+          )}
+          {exhibitorKind === 'spot' && (
+            <>
+              <label style={labelStyle}>
+                {adminText(locale, 'exhibitorSpotAddressLabel')}
+                <input style={inputStyle} value={exhibitorAddress} onChange={(e) => setExhibitorAddress(e.target.value)} />
+              </label>
+              <label style={labelStyle}>
+                {adminText(locale, 'exhibitorDescriptionLabel')}
+                <input style={inputStyle} value={exhibitorDescription} onChange={(e) => setExhibitorDescription(e.target.value)} />
+              </label>
+            </>
+          )}
+          {exhibitorKind !== 'spot' && billingAddressRequired && (
             <>
               <label style={labelStyle}>
                 {adminText(locale, 'exhibitorAddressLabel')}
@@ -741,6 +904,7 @@ export default function EventCouponAdminPage() {
                 fontSize: 14,
                 fontWeight: 600,
                 cursor: 'pointer',
+                marginBottom: 8,
               }}
             >
               <input
@@ -752,11 +916,32 @@ export default function EventCouponAdminPage() {
               />
               {adminText(locale, 'exhibitorKindAdvertiser')}
             </label>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="exhibitor-kind"
+                checked={exhibitorKind === 'spot'}
+                onChange={() => setExhibitorKind('spot')}
+                style={{ width: 17, height: 17 }}
+              />
+              {adminText(locale, 'exhibitorKindSpot')}
+            </label>
           </div>
           <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
-            {adminText(locale, 'exhibitorEmailNote')}
+            {exhibitorKind === 'spot'
+              ? adminText(locale, 'exhibitorSpotNote')
+              : adminText(locale, 'exhibitorEmailNote')}
           </p>
-          <button onClick={handleAddExhibitor} disabled={busy || !exhibitorName.trim() || !exhibitorEmail.trim() || (billingAddressRequired && !exhibitorAddress.trim())} style={primaryButtonStyle}>
+          <button onClick={handleAddExhibitor} disabled={busy || !exhibitorName.trim() || (exhibitorKind !== 'spot' && (!exhibitorEmail.trim() || (billingAddressRequired && !exhibitorAddress.trim())))} style={primaryButtonStyle}>
             <span style={adminButtonContentStyle}>
               {pendingForm === 'exhibitor' && <ButtonSpinner />}
               {pendingForm === 'exhibitor'
@@ -869,6 +1054,130 @@ export default function EventCouponAdminPage() {
                   </p>
                 )}
                 {stampMessage && <p style={adminFeedbackStyle}>{stampMessage}</p>}
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {shopExhibitors.length > 0 && (
+        <section style={{ marginTop: 30 }}>
+          <h2 style={sectionTitleStyle}>{adminText(locale, 'checkpointSettingsTitle')}</h2>
+          <p style={{ fontSize: 12.5, color: '#64748b', marginTop: 5 }}>
+            {adminText(locale, 'checkpointSettingsNote')}
+          </p>
+          <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+            <label style={labelStyle}>
+              {adminText(locale, 'checkpointSelectLabel')}
+              <select
+                style={inputStyle}
+                value={cpTarget?.id ?? ''}
+                onChange={(e) => setCpTargetId(e.target.value)}
+              >
+                {shopExhibitors.map((exhibitor) => (
+                  <option key={exhibitor.id} value={exhibitor.id}>
+                    {exhibitor.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {cpTarget && (
+              <>
+                <label style={labelStyle}>
+                  {adminText(locale, 'checkpointNumberLabel')}
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={cpNumber}
+                    placeholder={adminText(locale, 'checkpointNumberPlaceholder')}
+                    onChange={(e) => setCpNumber(e.target.value)}
+                  />
+                </label>
+                <fieldset style={{ border: 'none', padding: 0, margin: '4px 0 0' }}>
+                  <legend style={{ fontSize: 13, fontWeight: 600, padding: 0 }}>
+                    {adminText(locale, 'stampMethodsLabel')}
+                  </legend>
+                  {(
+                    [
+                      ['staff', 'stampMethodStaff'],
+                      ['placed', 'stampMethodPlaced'],
+                      ['rotating', 'stampMethodRotating'],
+                    ] as const
+                  ).map(([method, labelKey]) => (
+                    <label
+                      key={method}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        fontSize: 14,
+                        fontWeight: 600,
+                        marginTop: 10,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={cpMethods.includes(method)}
+                        onChange={() => toggleCpMethod(method)}
+                        style={{ width: 17, height: 17 }}
+                      />
+                      {adminText(locale, labelKey)}
+                    </label>
+                  ))}
+                </fieldset>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    marginTop: 16,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={cpGpsCheck}
+                    onChange={(e) => setCpGpsCheck(e.target.checked)}
+                    style={{ width: 17, height: 17 }}
+                  />
+                  {adminText(locale, 'gpsCheckLabel')}
+                </label>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    marginTop: 10,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={cpVelocityCheck}
+                    onChange={(e) => setCpVelocityCheck(e.target.checked)}
+                    style={{ width: 17, height: 17 }}
+                  />
+                  {adminText(locale, 'velocityCheckLabel')}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveCheckpointSettings()}
+                  disabled={cpBusy}
+                  style={{ ...primaryButtonStyle, marginTop: 20 }}
+                >
+                  <span style={adminButtonContentStyle}>
+                    {cpBusy && <ButtonSpinner />}
+                    {adminText(locale, 'checkpointSettingsSaveButton')}
+                  </span>
+                </button>
+                {cpMessage && <p style={adminFeedbackStyle}>{cpMessage}</p>}
               </>
             )}
           </div>
@@ -1018,7 +1327,7 @@ export default function EventCouponAdminPage() {
             >
               <option value="">{adminText(locale, 'selectPlaceholder')}</option>
               {exhibitors
-                .filter((exhibitor) => exhibitor.kind !== 'advertiser')
+                .filter((exhibitor) => (exhibitor.kind ?? 'shop') === 'shop')
                 .map((exhibitor) => (
                   <option key={exhibitor.id} value={exhibitor.id}>
                     {exhibitor.name}

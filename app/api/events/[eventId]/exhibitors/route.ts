@@ -3,16 +3,24 @@
 // 登録すると、そのイベント専用のログインパスワード（アクセスコード）が発行
 // され、出店者のメールアドレス宛てに送信される（lib/exhibitor-access.ts）。
 // 出店者は Firebase Auth のアカウントを持たない。
+// スポット（kind='spot'）はチェックポイント専用で、メールもアクセス
+// コードも発行しない（名前・説明・住所だけで登録する）。
 // 店舗課金オプションが有効な契約では、登録時に住所（管理用・非公開）が
 // 必須になる。画面側は GET の billingAddressRequired で入力欄の出し分けを
 // 行い、サーバー側でも同じ条件で必須を強制する。
 import { NextResponse } from 'next/server';
 import { requireEventOwner } from '@/lib/event-auth';
+import { db } from '@/lib/firebase-admin';
 import {
+  createExhibitor,
   ensureExhibitorStampCode,
   listExhibitors,
   parseExhibitorKind,
 } from '@/lib/event-coupon';
+import {
+  updateShopProfile,
+  validateShopProfileInput,
+} from '@/lib/event-shop';
 import {
   ExhibitorAccessError,
   parseRegistrationAddress,
@@ -69,10 +77,39 @@ export async function POST(
   if (!name.trim()) {
     return NextResponse.json({ error: '出店者名が必要です' }, { status: 400 });
   }
-  const email = typeof body.email === 'string' ? body.email : '';
-  // アカウントの種類: 'advertiser'（協賛・広告専用）だけを特別扱いし、
-  // それ以外は参加店（'shop'）として発行する。
+  // アカウントの種類: 'advertiser'（協賛・広告専用）と 'spot'
+  // （スポット・チェックポイント専用）だけを特別扱いし、それ以外は
+  // 参加店（'shop'）として発行する。
   const kind = parseExhibitorKind(body.kind);
+
+  // スポットはログインを持たないため、メールアドレスもアクセスコードも
+  // 発行しない。名前だけで登録し、説明・住所は公開プロフィール
+  // （特設サイト・参加者画面の表示用）として保存する。住所からは
+  // 地図表示用の座標も引く（updateShopProfile のサーバー側解決）。
+  if (kind === 'spot') {
+    const validation = validateShopProfileInput({
+      address: typeof body.address === 'string' ? body.address : '',
+      description: typeof body.description === 'string' ? body.description : '',
+    });
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+    try {
+      const exhibitor = await createExhibitor(eventId, {
+        name,
+        kind: 'spot',
+      });
+      await updateShopProfile(db, eventId, exhibitor.id, validation.value);
+      return NextResponse.json({ exhibitor }, { status: 201 });
+    } catch {
+      return NextResponse.json(
+        { error: 'スポットの登録に失敗しました' },
+        { status: 500 },
+      );
+    }
+  }
+
+  const email = typeof body.email === 'string' ? body.email : '';
 
   // 店舗課金オプションが有効な契約では住所が必須（画面の出し分けに
   // 頼らず、サーバー側でも強制する）。
@@ -104,6 +141,10 @@ export async function POST(
       delistedAt: null,
       closedAt: null,
       stampCode: null,
+      checkpointNumber: null,
+      stampMethods: kind === 'advertiser' ? [] : ['staff' as const],
+      gpsCheck: false,
+      velocityCheck: false,
     };
     // コード自体はレスポンスに含めない（メールでのみ出店者に渡る）。
     // メール送信の成否は mailSent で返す（失敗しても登録は成立しているので、
