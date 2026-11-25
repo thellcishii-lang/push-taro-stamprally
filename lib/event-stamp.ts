@@ -7,6 +7,9 @@
 // - freeCoupons/{id}: 達成で発行される「好きな店で1回無料」クーポン。
 //   どの参加店でも使える。クーポン枠（couponCap）の数には数えない
 //   （あれは主催者が発行する通常クーポンの枠）。
+// - 途中の特典（マイルストーン）も freeCoupons に発行する。達成特典とは
+//   別枠で、クーポン側に milestoneCount の印を付け、1周につき各特典
+//   1回だけ発行する（発行済み判定は印で引く）。
 // - 周（ラリー1周）の現在位置は購読者ドキュメントの stampRound に持つ。
 //   達成したら無料クーポンを発行し、stampRound を次周へ進める
 //   （達成後も次の無料分へカウントが継続する）。
@@ -24,8 +27,10 @@ import {
   EVENT_SUBCOLLECTIONS,
   jstDateString,
   parseStampBenefitText,
+  parseStampMilestones,
   parseStampRewardType,
   type EventConfig,
+  type StampMilestone,
   type StampRewardType,
 } from './event';
 import { getEvent } from './event-store';
@@ -94,6 +99,12 @@ export interface StampFreeCoupon {
   /** 何周目／何サイクル目の達成で発行されたか */
   round: number;
   /**
+   * 途中の特典（マイルストーン）として発行された場合の到達個数。
+   * 達成特典・ログインボーナスのクーポンと、印の導入前に発行された
+   * クーポンでは null。
+   */
+  milestoneCount: number | null;
+  /**
    * 発行時点の特典の種類（スナップショット）。後からプロジェクト設定を
    * 変えても、発行済みクーポンの表示は変わらない。特典スナップショット
    * 導入前に発行されたクーポンには項目が無いため 'free-dish' に倒す。
@@ -117,6 +128,11 @@ export interface StampCard {
    */
   rewardType: StampRewardType;
   benefitText: string;
+  /**
+   * 途中の特典（マイルストーン）の設定（個数の昇順）。
+   * 参加者画面の進み具合（次の特典まであと○個）の表示用。
+   */
+  milestones: StampMilestone[];
   /** 現在の周で集めたスタンプ数 */
   countInRound: number;
   /** 達成まであと何個か */
@@ -329,6 +345,9 @@ function mapFreeCoupon(
     // ログインボーナス導入前のクーポンには項目が無いため 'stamp' に倒す
     kind: data.kind === 'login' ? 'login' : 'stamp',
     round: typeof data.round === 'number' ? data.round : 0,
+    // 途中の特典の印。達成特典など印が無いクーポンは null
+    milestoneCount:
+      typeof data.milestoneCount === 'number' ? data.milestoneCount : null,
     // スナップショット導入前のクーポンには項目が無いため従来種別に倒す
     rewardType: parseStampRewardType(data.rewardType),
     benefitText: parseStampBenefitText(data.benefitText),
@@ -359,6 +378,8 @@ export type GrantStampResult =
       /** 今回で達成したか（無料クーポン発行済み） */
       completed: boolean;
       freeCouponId: string | null;
+      /** 今回発行した途中の特典（マイルストーン）のクーポンID群 */
+      milestoneFreeCouponIds: string[];
       /** 発行したクーポンの特典スナップショット（未達成でも現在の設定を返す） */
       rewardType: StampRewardType;
       benefitText: string;
@@ -503,6 +524,33 @@ export async function grantStamp(
       stampRounds.filter((r) => r === round).length + 1;
     const completed = isRoundCompleted(countInRound, goalCount);
 
+    // 途中の特典（マイルストーン）: 今ラウンドの個数が設定個数に到達した
+    // 特典を、達成特典とは別枠で発行する。各特典は1周につき1人1回だけ。
+    // 発行済み判定は、この周で印（milestoneCount）つきで発行された
+    // クーポンの有無で行う（トランザクション内の読み取りなので、
+    // 再実行・競合でも二重発行しない）。読み取りは書き込みより前に行う。
+    const milestones = parseStampMilestones(event.stampMilestones);
+    const dueMilestones = milestones.filter((m) => m.count <= countInRound);
+    const issuedMilestoneCounts = new Set<number>();
+    if (dueMilestones.length > 0) {
+      const freeSnap = await tx.get(
+        freeCouponsRef(db, input.eventId).where(
+          'memberId',
+          '==',
+          input.memberId,
+        ),
+      );
+      for (const doc of freeSnap.docs) {
+        const data = doc.data();
+        if (
+          data.round === round &&
+          typeof data.milestoneCount === 'number'
+        ) {
+          issuedMilestoneCounts.add(data.milestoneCount);
+        }
+      }
+    }
+
     tx.set(stampRef, {
       memberId: input.memberId,
       exhibitorId: input.exhibitor.id,
@@ -514,6 +562,26 @@ export async function grantStamp(
     });
 
     const reward = buildStampRewardSnapshot(event);
+    const milestoneFreeCouponIds: string[] = [];
+    for (const milestone of dueMilestones) {
+      if (issuedMilestoneCounts.has(milestone.count)) continue;
+      const milestoneRef = freeCouponsRef(db, input.eventId).doc();
+      milestoneFreeCouponIds.push(milestoneRef.id);
+      tx.set(milestoneRef, {
+        memberId: input.memberId,
+        kind: 'stamp',
+        round,
+        // 途中の特典の印（到達個数）。達成特典のクーポンには付けない
+        milestoneCount: milestone.count,
+        // 特典は達成特典と同じく発行時点のスナップショットで固定する
+        ...buildStampRewardSnapshot({
+          stampRewardType: milestone.rewardType,
+          stampBenefitText: milestone.benefitText,
+        }),
+        status: 'active',
+        issuedAt: FieldValue.serverTimestamp(),
+      });
+    }
     let freeCouponId: string | null = null;
     if (completed) {
       const freeRef = freeCouponsRef(db, input.eventId).doc();
@@ -550,6 +618,7 @@ export async function grantStamp(
       goalCount,
       completed,
       freeCouponId,
+      milestoneFreeCouponIds,
       rewardType: reward.rewardType,
       benefitText: reward.benefitText,
     } as GrantStampResult;
@@ -781,6 +850,7 @@ export async function getStampCard(
     goalCount: event.stampGoalCount,
     rewardType: event.stampRewardType,
     benefitText: event.stampBenefitText,
+    milestones: parseStampMilestones(event.stampMilestones),
     countInRound: stamps.length,
     remaining: Math.max(event.stampGoalCount - stamps.length, 0),
     stamps,

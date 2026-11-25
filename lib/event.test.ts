@@ -26,6 +26,7 @@ import {
   normalizeReviewCategories,
   normalizeShopMonthlyPrice,
   normalizeStampBenefitText,
+  normalizeStampMilestones,
   normalizeStampRewardType,
   parseAdsPrice,
   parseAdsSlots,
@@ -37,6 +38,7 @@ import {
   parseReviewCategories,
   parseStampBenefitText,
   parseStampGoalCount,
+  parseStampMilestones,
   parseStampRewardType,
   validateStampRewardSettings,
   receivesCapsPropagation,
@@ -259,6 +261,94 @@ describe('スタンプ達成個数（stampGoalCount）', () => {
     expect(parseStampGoalCount(0)).toBe(5);
     expect(parseStampGoalCount(201)).toBe(5);
     expect(parseStampGoalCount('3')).toBe(5);
+  });
+});
+
+describe('途中の特典（stampMilestones）', () => {
+  it('読み取り時は有効な要素だけを個数の昇順で返す', () => {
+    expect(
+      parseStampMilestones([
+        { count: 5, rewardType: 'benefit', benefitText: 'グッズ進呈' },
+        { count: 2, rewardType: 'free-dish', benefitText: '' },
+      ]),
+    ).toEqual([
+      { count: 2, rewardType: 'free-dish', benefitText: '' },
+      { count: 5, rewardType: 'benefit', benefitText: 'グッズ進呈' },
+    ]);
+  });
+  it('読み取り時は未設定・配列でない値を空配列に倒す', () => {
+    expect(parseStampMilestones(undefined)).toEqual([]);
+    expect(parseStampMilestones(null)).toEqual([]);
+    expect(parseStampMilestones('x')).toEqual([]);
+    expect(parseStampMilestones([])).toEqual([]);
+  });
+  it('読み取り時は不正な要素を落とす', () => {
+    expect(
+      parseStampMilestones([
+        { count: 0, rewardType: 'free-dish', benefitText: '' },
+        { count: 201, rewardType: 'free-dish', benefitText: '' },
+        { count: 2.5, rewardType: 'free-dish', benefitText: '' },
+        { count: '3', rewardType: 'free-dish', benefitText: '' },
+        // benefit なのに内容が無い要素は発行できないため落とす
+        { count: 3, rewardType: 'benefit', benefitText: '' },
+        { count: 4, rewardType: 'unknown', benefitText: '' },
+        'not-an-object',
+        null,
+        { count: 6, rewardType: 'free-dish', benefitText: '' },
+      ]),
+    ).toEqual([
+      // 未知の種類は従来種別（free-dish）に倒して残る
+      { count: 4, rewardType: 'free-dish', benefitText: '' },
+      { count: 6, rewardType: 'free-dish', benefitText: '' },
+    ]);
+  });
+  it('読み取り時は同じ個数が複数あれば最初の1件を採用する', () => {
+    expect(
+      parseStampMilestones([
+        { count: 3, rewardType: 'benefit', benefitText: '最初の特典' },
+        { count: 3, rewardType: 'free-dish', benefitText: '' },
+      ]),
+    ).toEqual([{ count: 3, rewardType: 'benefit', benefitText: '最初の特典' }]);
+  });
+  it('書き込み時は未指定を空配列にし、有効な入力を昇順で正規化する', () => {
+    expect(normalizeStampMilestones(undefined)).toEqual([]);
+    expect(normalizeStampMilestones(null)).toEqual([]);
+    expect(
+      normalizeStampMilestones([
+        { count: 5, rewardType: 'benefit', benefitText: ' グッズ進呈 ' },
+        { count: 2, rewardType: 'free-dish' },
+      ]),
+    ).toEqual([
+      { count: 2, rewardType: 'free-dish', benefitText: '' },
+      { count: 5, rewardType: 'benefit', benefitText: 'グッズ進呈' },
+    ]);
+  });
+  it('書き込み時は不正な入力を throw する', () => {
+    expect(() => normalizeStampMilestones('x')).toThrow();
+    expect(() =>
+      normalizeStampMilestones([{ count: 0, rewardType: 'free-dish' }]),
+    ).toThrow();
+    expect(() =>
+      normalizeStampMilestones([{ count: 201, rewardType: 'free-dish' }]),
+    ).toThrow();
+    expect(() =>
+      normalizeStampMilestones([{ count: 3, rewardType: 'benefit' }]),
+    ).toThrow();
+    expect(() =>
+      normalizeStampMilestones([
+        { count: 3, rewardType: 'free-dish' },
+        { count: 3, rewardType: 'free-dish' },
+      ]),
+    ).toThrow();
+  });
+  it('件数の上限は設けない（多い件数でもそのまま通る）', () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      count: i + 1,
+      rewardType: 'free-dish' as const,
+      benefitText: '',
+    }));
+    expect(parseStampMilestones(many)).toHaveLength(30);
+    expect(normalizeStampMilestones(many)).toHaveLength(30);
   });
 });
 

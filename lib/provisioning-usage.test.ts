@@ -22,6 +22,7 @@ function eventWith(status: EventConfig['status']): EventConfig {
     stampGoalCount: 5,
     stampRewardType: 'free-dish',
     stampBenefitText: '',
+    stampMilestones: [],
     sequentialStamps: false,
     rankingMinReviews: 3,
     reviewCategories: ['味', '接客', '雰囲気', '盛り付け'],

@@ -27,6 +27,22 @@ export type EventStatus = 'draft' | 'live' | 'ended';
 export type StampRewardType = 'free-dish' | 'benefit';
 
 /**
+ * 途中の特典（マイルストーン特典）。ラリー1周の途中で、スタンプが
+ * count 個に届いた時点で1回だけ自動発行される特典。最終の達成特典
+ * （stampGoalCount 到達時）とは別枠で、件数の上限は設けない。
+ * 発行されるクーポンには発行時点の種類・内容がスナップショットとして
+ * 写され、freeCoupons 側に milestoneCount の印が付く。
+ */
+export interface StampMilestone {
+  /** 到達スタンプ数（1〜MAX_STAMP_SLOTS の整数。同じ個数は1件だけ） */
+  count: number;
+  /** 特典の種類（達成特典と同じ2種） */
+  rewardType: StampRewardType;
+  /** 特典の内容。rewardType が 'benefit' のとき必須 */
+  benefitText: string;
+}
+
+/**
  * 主催者リンク（最大3件）。来場者画面にタイトル付きカードで表示される。
  * プロジェクトドキュメントの links フィールドに配列で持つ。
  * タイトルは主催者が書いた原文のまま表示する（案内PDFのタイトルと同じ扱い、
@@ -98,6 +114,14 @@ export interface EventConfig {
    * 空文字に倒す。
    */
   stampBenefitText: string;
+  /**
+   * 途中の特典（マイルストーン特典）の一覧。主催者がプロジェクトごとに
+   * 設定する。ラリー1周の中でスタンプが各 count に届いた時点で、その周に
+   * 1回だけ特典クーポンが自動発行される（達成特典とは別枠）。
+   * 件数の上限は設けない。導入前に作られたプロジェクトには項目自体が
+   * 無いため、読み取り時は空配列に倒す。
+   */
+  stampMilestones: StampMilestone[];
   /**
    * 順番モード（主催者がプロジェクトごとに設定する。既定オフ）。
    * オンにすると、スタンプはチェックポイント番号の順にしか押せない
@@ -334,6 +358,7 @@ export interface CreateEventInput {
   stampGoalCount?: number;
   stampRewardType?: StampRewardType;
   stampBenefitText?: string;
+  stampMilestones?: StampMilestone[];
   sequentialStamps?: boolean;
   rankingMinReviews?: number;
   reviewCategories?: string[];
@@ -607,6 +632,74 @@ export function validateStampRewardSettings(
   if (rewardType === 'benefit' && !benefitText) {
     throw new Error('特典を選ぶ場合は、特典の内容を入力してください');
   }
+}
+
+/**
+ * 保存済みの途中の特典（マイルストーン）を防御的に読む（読み取り用。
+ * throw しない）。項目が無い旧プロジェクトは空配列。不正な要素は落とし、
+ * 同じ個数が複数あれば最初の1件だけを採用する。結果は個数の昇順。
+ * 件数の上限は設けない。
+ */
+export function parseStampMilestones(value: unknown): StampMilestone[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<number>();
+  const milestones: StampMilestone[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as {
+      count?: unknown;
+      rewardType?: unknown;
+      benefitText?: unknown;
+    };
+    if (!isValidStampGoalCount(raw.count)) continue;
+    const count = raw.count as number;
+    if (seen.has(count)) continue;
+    const rewardType = parseStampRewardType(raw.rewardType);
+    const benefitText = parseStampBenefitText(raw.benefitText);
+    // 'benefit' で内容が無い特典は発行できないため落とす
+    if (rewardType === 'benefit' && !benefitText) continue;
+    seen.add(count);
+    milestones.push({ count, rewardType, benefitText });
+  }
+  return milestones.sort((a, b) => a.count - b.count);
+}
+
+/**
+ * 途中の特典（マイルストーン）の入力を検証して正規化する（書き込み用。
+ * 不正なら throw）。未指定は空配列。個数は1〜MAX_STAMP_SLOTS の整数で
+ * 重複不可、'benefit' のときは内容が必須（達成特典と同じルール）。
+ * 件数の上限は設けない。結果は個数の昇順。
+ */
+export function normalizeStampMilestones(input: unknown): StampMilestone[] {
+  if (input === undefined || input === null) return [];
+  if (!Array.isArray(input)) throw new Error('途中の特典の形式が不正です');
+  const seen = new Set<number>();
+  const milestones: StampMilestone[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      throw new Error('途中の特典の形式が不正です');
+    }
+    const raw = item as {
+      count?: unknown;
+      rewardType?: unknown;
+      benefitText?: unknown;
+    };
+    if (!isValidStampGoalCount(raw.count)) {
+      throw new Error(
+        `途中の特典の個数は1〜${MAX_STAMP_SLOTS}の整数で指定してください`,
+      );
+    }
+    const count = raw.count as number;
+    if (seen.has(count)) {
+      throw new Error('途中の特典の個数は重複させないでください');
+    }
+    const rewardType = normalizeStampRewardType(raw.rewardType);
+    const benefitText = normalizeStampBenefitText(raw.benefitText);
+    validateStampRewardSettings(rewardType, benefitText);
+    seen.add(count);
+    milestones.push({ count, rewardType, benefitText });
+  }
+  return milestones.sort((a, b) => a.count - b.count);
 }
 
 /** トップ掲載の月額料金の下限・上限（円）。0 は無料（参加表明制）。 */

@@ -53,6 +53,34 @@ interface InfoPdf {
   url: string;
 }
 
+/** 途中の特典の編集行。個数は入力途中の空欄を許すため文字列で持つ。 */
+interface MilestoneRow {
+  count: string;
+  rewardType: 'free-dish' | 'benefit';
+  benefitText: string;
+}
+
+/** API から読んだ途中の特典を編集行に変換する（不正な要素は落とす）。 */
+function toMilestoneRows(value: unknown): MilestoneRow[] {
+  if (!Array.isArray(value)) return [];
+  const rows: MilestoneRow[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as {
+      count?: unknown;
+      rewardType?: unknown;
+      benefitText?: unknown;
+    };
+    if (typeof raw.count !== 'number') continue;
+    rows.push({
+      count: String(raw.count),
+      rewardType: raw.rewardType === 'benefit' ? 'benefit' : 'free-dish',
+      benefitText: typeof raw.benefitText === 'string' ? raw.benefitText : '',
+    });
+  }
+  return rows;
+}
+
 const VIOLET = '#8B5E34';
 
 const containerStyle: React.CSSProperties = {
@@ -145,6 +173,7 @@ export default function EventSettingsAdminPage() {
   const [stampRewardType, setStampRewardType] = useState<'free-dish' | 'benefit'>('free-dish');
   const [stampBenefitText, setStampBenefitText] = useState('');
   const [sequentialStamps, setSequentialStamps] = useState(false);
+  const [stampMilestones, setStampMilestones] = useState<MilestoneRow[]>([]);
   const [stampGoalMessage, setStampGoalMessage] = useState('');
   const [stampGoalSaving, setStampGoalSaving] = useState(false);
   const [rankingMinReviews, setRankingMinReviews] = useState(3);
@@ -229,6 +258,7 @@ export default function EventSettingsAdminPage() {
       if (typeof data.event?.sequentialStamps === 'boolean') {
         setSequentialStamps(data.event.sequentialStamps);
       }
+      setStampMilestones(toMilestoneRows(data.event?.stampMilestones));
       if (typeof data.event?.rankingMinReviews === 'number') {
         setRankingMinReviews(data.event.rankingMinReviews);
       }
@@ -303,17 +333,74 @@ export default function EventSettingsAdminPage() {
     }
   };
 
+  const updateMilestoneRow = (
+    index: number,
+    field: keyof MilestoneRow,
+    value: string,
+  ) => {
+    setStampMilestones((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
+    );
+  };
+
+  const addMilestoneRow = () => {
+    setStampMilestones((rows) => [
+      ...rows,
+      { count: '', rewardType: 'free-dish', benefitText: '' },
+    ]);
+  };
+
+  const removeMilestoneRow = (index: number) => {
+    setStampMilestones((rows) => rows.filter((_, i) => i !== index));
+  };
+
   const handleSaveStampGoal = async () => {
     if (stampRewardType === 'benefit' && !stampBenefitText.trim()) {
       setStampGoalMessage(adminText(locale, 'stampBenefitRequired'));
       return;
+    }
+    // 途中の特典は保存前に検証する（個数 1〜上限の整数・重複なし、
+    // 特典のときは内容必須）。目標個数を超える行は注意文だけで保存は通す。
+    const milestonePayload: Array<{
+      count: number;
+      rewardType: 'free-dish' | 'benefit';
+      benefitText: string;
+    }> = [];
+    const seenMilestoneCounts = new Set<number>();
+    for (const row of stampMilestones) {
+      const count = Number(row.count);
+      if (
+        !Number.isInteger(count) ||
+        count < 1 ||
+        count > MAX_STAMP_SLOTS ||
+        seenMilestoneCounts.has(count)
+      ) {
+        setStampGoalMessage(adminText(locale, 'stampMilestoneInvalid'));
+        return;
+      }
+      if (row.rewardType === 'benefit' && !row.benefitText.trim()) {
+        setStampGoalMessage(adminText(locale, 'stampBenefitRequired'));
+        return;
+      }
+      seenMilestoneCounts.add(count);
+      milestonePayload.push({
+        count,
+        rewardType: row.rewardType,
+        benefitText: row.benefitText.trim(),
+      });
     }
     setStampGoalSaving(true);
     setStampGoalMessage('');
     try {
       const data = await callApi(`/api/events/${eventId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ stampGoalCount, stampRewardType, stampBenefitText, sequentialStamps }),
+        body: JSON.stringify({
+          stampGoalCount,
+          stampRewardType,
+          stampBenefitText,
+          sequentialStamps,
+          stampMilestones: milestonePayload,
+        }),
       });
       if (typeof data.event?.stampGoalCount === 'number') {
         setStampGoalCount(data.event.stampGoalCount);
@@ -329,6 +416,7 @@ export default function EventSettingsAdminPage() {
       if (typeof data.event?.sequentialStamps === 'boolean') {
         setSequentialStamps(data.event.sequentialStamps);
       }
+      setStampMilestones(toMilestoneRows(data.event?.stampMilestones));
       setStampGoalMessage(adminText(locale, 'stampGoalSaved'));
     } catch (e) {
       setStampGoalMessage(
@@ -761,6 +849,128 @@ export default function EventSettingsAdminPage() {
           <p style={{ fontSize: 12.5, color: '#64748b', margin: '8px 0 0' }}>
             {adminText(locale, 'sequentialStampsNote')}
           </p>
+          <fieldset style={{ border: 'none', padding: 0, margin: '24px 0 0' }}>
+            <legend style={{ fontSize: 13, fontWeight: 600, padding: 0 }}>
+              {adminText(locale, 'stampMilestonesTitle')}
+            </legend>
+            <p style={{ fontSize: 12.5, color: '#64748b', margin: '6px 0 0' }}>
+              {adminText(locale, 'stampMilestonesNote')}
+            </p>
+            {stampMilestones.map((row, i) => {
+              const countNumber = Number(row.count);
+              const exceedsGoal =
+                Number.isInteger(countNumber) && countNumber > stampGoalCount;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    border: '1px solid #E8DCC4',
+                    borderRadius: 12,
+                    padding: 12,
+                    marginTop: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 8,
+                      alignItems: 'flex-end',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <label
+                      style={{ fontSize: 12.5, fontWeight: 600, flex: '0 0 96px' }}
+                    >
+                      {adminText(locale, 'stampMilestoneCountLabel')}
+                      <input
+                        style={{ ...inputStyle, marginTop: 4 }}
+                        type="number"
+                        min={1}
+                        max={MAX_STAMP_SLOTS}
+                        value={row.count}
+                        onChange={(e) =>
+                          updateMilestoneRow(i, 'count', e.target.value)
+                        }
+                      />
+                    </label>
+                    <label
+                      style={{ fontSize: 12.5, fontWeight: 600, flex: '1 1 180px' }}
+                    >
+                      {adminText(locale, 'stampRewardTypeLabel')}
+                      <select
+                        style={{ ...inputStyle, marginTop: 4 }}
+                        value={row.rewardType}
+                        onChange={(e) =>
+                          updateMilestoneRow(i, 'rewardType', e.target.value)
+                        }
+                      >
+                        <option value="free-dish">
+                          {adminText(locale, 'stampRewardFreeDishOption')}
+                        </option>
+                        <option value="benefit">
+                          {adminText(locale, 'stampRewardBenefitOption')}
+                        </option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => removeMilestoneRow(i)}
+                      style={{ ...dangerButtonStyle, marginBottom: 2 }}
+                    >
+                      {adminText(locale, 'stampMilestoneDeleteButton')}
+                    </button>
+                  </div>
+                  {row.rewardType === 'benefit' && (
+                    <label
+                      style={{ ...labelStyle, margin: '12px 0 0' }}
+                    >
+                      {adminText(locale, 'stampBenefitTextLabel')}
+                      <input
+                        style={inputStyle}
+                        value={row.benefitText}
+                        maxLength={100}
+                        placeholder={adminText(
+                          locale,
+                          'stampBenefitTextPlaceholder',
+                        )}
+                        onChange={(e) =>
+                          updateMilestoneRow(i, 'benefitText', e.target.value)
+                        }
+                      />
+                    </label>
+                  )}
+                  {exceedsGoal && (
+                    <p
+                      style={{
+                        fontSize: 12.5,
+                        color: '#b45309',
+                        margin: '10px 0 0',
+                      }}
+                    >
+                      {adminText(locale, 'stampMilestoneExceedsGoal')}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              onClick={addMilestoneRow}
+              style={{
+                marginTop: 12,
+                padding: '8px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                borderRadius: 12,
+                border: '1px solid #E8DCC4',
+                backgroundColor: '#ffffff',
+                color: '#0f172a',
+                cursor: 'pointer',
+              }}
+            >
+              {adminText(locale, 'stampMilestoneAddButton')}
+            </button>
+          </fieldset>
           <button
             onClick={() => void handleSaveStampGoal()}
             disabled={stampGoalSaving}
