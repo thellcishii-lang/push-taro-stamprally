@@ -426,6 +426,11 @@ export default function EventCouponAdminPage() {
   const [cpVelocityCheck, setCpVelocityCheck] = useState(false);
   const [cpMessage, setCpMessage] = useState('');
   const [cpBusy, setCpBusy] = useState(false);
+  // 回転QR表示リンク（対象チェックポイントごと。平文URLは発行時だけ見える）
+  const [cpDisplayUrl, setCpDisplayUrl] = useState('');
+  const [cpHasDisplayLink, setCpHasDisplayLink] = useState(false);
+  const [cpDisplayBusy, setCpDisplayBusy] = useState(false);
+  const [cpDisplayMessage, setCpDisplayMessage] = useState('');
   const cpTarget =
     shopExhibitors.find((e) => e.id === cpTargetId) ?? shopExhibitors[0] ?? null;
 
@@ -501,6 +506,62 @@ export default function EventCouponAdminPage() {
       );
     } finally {
       setCpBusy(false);
+    }
+  };
+
+  // 対象が変わったら、表示リンクの発行状態を取り直す。
+  const cpDisplayLoadedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!cpTarget || !user) return;
+    if (cpDisplayLoadedForRef.current === cpTarget.id) return;
+    cpDisplayLoadedForRef.current = cpTarget.id;
+    setCpDisplayUrl('');
+    setCpDisplayMessage('');
+    setCpHasDisplayLink(false);
+    void (async () => {
+      try {
+        const result = await callApi(
+          `/api/events/${eventId}/exhibitors/${cpTarget.id}/display-token`,
+        );
+        setCpHasDisplayLink(result?.hasLink === true);
+      } catch {
+        // 状態が取れなくても、チェックポイント設定の保存は妨げない
+      }
+    })();
+  }, [cpTarget, user, callApi, eventId]);
+
+  const handleIssueDisplayLink = async () => {
+    if (!cpTarget) return;
+    setCpDisplayBusy(true);
+    setCpDisplayMessage('');
+    try {
+      const result = await callApi(
+        `/api/events/${eventId}/exhibitors/${cpTarget.id}/display-token`,
+        { method: 'POST' },
+      );
+      if (typeof result?.url === 'string') {
+        setCpDisplayUrl(result.url);
+        setCpHasDisplayLink(true);
+      }
+      setCpDisplayMessage(adminText(locale, 'rotatingDisplayLinkIssued'));
+    } catch (e) {
+      setCpDisplayMessage(
+        e instanceof Error
+          ? e.message
+          : adminText(locale, 'rotatingDisplayLinkFailed'),
+      );
+    } finally {
+      setCpDisplayBusy(false);
+    }
+  };
+
+  const handleCopyDisplayLink = async () => {
+    if (!cpDisplayUrl) return;
+    try {
+      await navigator.clipboard.writeText(cpDisplayUrl);
+      setCpDisplayMessage(adminText(locale, 'rotatingDisplayLinkCopied'));
+    } catch {
+      // コピーできなくても URL は表示されているので手動でコピーできる
     }
   };
 
@@ -1178,6 +1239,74 @@ export default function EventCouponAdminPage() {
                   </span>
                 </button>
                 {cpMessage && <p style={adminFeedbackStyle}>{cpMessage}</p>}
+                {cpMethods.includes('rotating') && (
+                  <div
+                    style={{
+                      marginTop: 24,
+                      borderTop: '1px solid #e2e8f0',
+                      paddingTop: 18,
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      {adminText(locale, 'rotatingDisplayLinkLabel')}
+                    </div>
+                    <p style={{ fontSize: 12.5, color: '#64748b', marginTop: 5 }}>
+                      {adminText(locale, 'rotatingDisplayLinkNote')}
+                    </p>
+                    {cpDisplayUrl && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 8,
+                          marginTop: 10,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <input
+                          style={{ ...inputStyle, flex: 1, marginTop: 0 }}
+                          readOnly
+                          value={cpDisplayUrl}
+                          onFocus={(e) => e.target.select()}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyDisplayLink()}
+                          style={{
+                            padding: '9px 14px',
+                            borderRadius: 8,
+                            border: '1px solid #cbd5e1',
+                            backgroundColor: '#ffffff',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {adminText(locale, 'rotatingDisplayLinkCopy')}
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleIssueDisplayLink()}
+                      disabled={cpDisplayBusy}
+                      style={{ ...primaryButtonStyle, marginTop: 12 }}
+                    >
+                      <span style={adminButtonContentStyle}>
+                        {cpDisplayBusy && <ButtonSpinner />}
+                        {adminText(
+                          locale,
+                          cpHasDisplayLink
+                            ? 'rotatingDisplayLinkReissue'
+                            : 'rotatingDisplayLinkIssue',
+                        )}
+                      </span>
+                    </button>
+                    {cpDisplayMessage && (
+                      <p style={adminFeedbackStyle}>{cpDisplayMessage}</p>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

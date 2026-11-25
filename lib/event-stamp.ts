@@ -14,14 +14,21 @@
 //   達成したら無料クーポンを発行し、stampRound を次周へ進める
 //   （達成後も次の無料分へカウントが継続する）。
 //
-// 付与の鉄則: 判定はすべてサーバー側（この lib）で行う。方式は2つ:
+// 付与の鉄則: 判定はすべてサーバー側（この lib）で行う。方式は3つ:
 // - shop-qr: 参加店セッションだけが押せる（主催者は押せない）。自店の
 //   スタンプしか押せないのは ID の構造上自明。
 // - placed-qr: お客さん本人が、スポットの stampCode（推測不能）で押す。
+// - rotating: お客さん本人が、固定ディスプレイの回転QR（数秒ごとに
+//   切り替わる署名つきコード）で押す。検証は lib/stamp-rotating.ts。
 // どの方式でも、会員・周・重複の規則は共通の grantStamp に合流する。
 // あわせて grantStamp では、チェックポイントごとの認証設定
 // （stampMethods: 有効な方法だけ許可）と、プロジェクトの順番モード
 // （sequentialStamps: 番号順にしか押せない）もここで実施する。
+// 追加チェック（お客さんが読む方式だけに適用）もここで実施する:
+// - GPSエリアチェック（gpsCheck）: 端末内で 50m 以内と判定した申告
+//   （withinRange）が無い付与は拒否する。座標はサーバーに送られない。
+// - 移動速度チェック（velocityCheck）: 直近の前回スタンプからの移動が
+//   あり得ない速さなら拒否する。
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import {
   EVENT_SUBCOLLECTIONS,
@@ -41,6 +48,13 @@ import {
   type ExhibitorKind,
 } from './event-coupon';
 import { isValidStampCode } from './stamp-qr';
+import { haversineMeters, type GeoPoint } from './geo';
+import { parseShopProfile } from './event-shop';
+import {
+  parseRotatingCode,
+  readExhibitorRotatingSecret,
+  verifyRotatingCode,
+} from './stamp-rotating';
 
 // stamps / freeCoupons はリセット・終了削除の対象外（電話番号を含まない台帳）。
 // EVENT_SUBCOLLECTIONS の4つとは分けて持つ（event-coupon.ts の exhibitors /
@@ -53,13 +67,14 @@ export const EVENT_FREE_COUPONS_COLLECTION = 'freeCoupons';
  * スタンプの付与方式。
  * - 'shop-qr': お客さんの QR をお店が読む（従来方式）
  * - 'placed-qr': チェックポイントに貼った場所 QR をお客さんが読む
+ * - 'rotating': 固定ディスプレイの回転 QR をお客さんが読む
  * 方式の導入前に押されたスタンプには項目が無いため 'shop-qr' に倒す。
  */
-export type StampMethod = 'shop-qr' | 'placed-qr';
+export type StampMethod = 'shop-qr' | 'placed-qr' | 'rotating';
 
 /** 保存済みの付与方式を防御的に読む（読み取り用）。未知・未設定は 'shop-qr'。 */
 export function parseStampMethod(value: unknown): StampMethod {
-  return value === 'placed-qr' ? value : 'shop-qr';
+  return value === 'placed-qr' || value === 'rotating' ? value : 'shop-qr';
 }
 
 export interface EventStamp {
@@ -292,6 +307,69 @@ export function evaluateSequentialStamp(input: {
   return { allowed: true };
 }
 
+// ─── 移動速度チェック ───
+
+/**
+ * 移動速度チェックの上限（km/h）。これを超える移動は現実にはあり得ない
+ * ものとして拒否する。写真をまとめて読む不正は数千 km/h 相当になる。
+ * 通常の徒歩・自転車・車の移動では到達しない値に置く。
+ */
+export const MAX_STAMP_SPEED_KMH = 120;
+
+export type StampVelocityDecision = { allowed: true } | { allowed: false };
+
+/**
+ * 移動速度チェックの判定（純粋関数）。
+ * 直近の前回スタンプ（別チェックポイント）の場所・時刻と、今回の
+ * チェックポイントの場所・現在時刻から移動速度を出す。
+ * どちらかの座標が無い・前回スタンプが無い場合は判定できないため通す。
+ */
+export function evaluateStampVelocity(input: {
+  previousLocation: GeoPoint | null;
+  previousAtMs: number | null;
+  currentLocation: GeoPoint | null;
+  nowMs: number;
+}): StampVelocityDecision {
+  if (!input.previousLocation || !input.currentLocation) {
+    return { allowed: true };
+  }
+  if (input.previousAtMs === null) return { allowed: true };
+  const distanceMeters = haversineMeters(
+    input.previousLocation,
+    input.currentLocation,
+  );
+  const elapsedMs = input.nowMs - input.previousAtMs;
+  if (elapsedMs <= 0) {
+    // 同時刻（または時計の巻き戻り）: 実質同じ場所なら問題なし
+    return { allowed: distanceMeters <= 50 };
+  }
+  const speedKmh = distanceMeters / 1000 / (elapsedMs / 3_600_000);
+  return { allowed: speedKmh <= MAX_STAMP_SPEED_KMH };
+}
+
+/**
+ * スタンプ記録の grantedAt をミリ秒に直す（読み取り用）。
+ * Firestore の Timestamp（toDate）・Date・数値・ISO文字列に対応し、
+ * 解釈できないものは null。
+ */
+export function grantedAtMillis(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof value === 'object') {
+    const toDate = (value as { toDate?: unknown }).toDate;
+    if (typeof toDate === 'function') {
+      const date = (toDate as () => Date).call(value);
+      return date instanceof Date ? date.getTime() : null;
+    }
+  }
+  return null;
+}
+
 // ─── Firestore 読み書き ───
 
 function stampsRef(db: Firestore, eventId: string) {
@@ -388,6 +466,12 @@ export type GrantStampResult =
       ok: false;
       status: number;
       error: string;
+      /**
+       * 画面側が文言を出し分けるための機械可読コード。
+       * 'gps-check-failed' = GPSエリアチェックの申告なし、
+       * 'too-fast' = 移動速度チェックで拒否。
+       */
+      code?: string;
       /** 順番モードで順番違いのとき、次に押せるチェックポイントの番号 */
       nextCheckpointNumber?: number | null;
     };
@@ -406,6 +490,12 @@ export async function grantStamp(
     memberId: string;
     /** 付与方式。未指定は従来方式（お店が客の QR を読む） */
     method?: StampMethod;
+    /**
+     * GPSエリアチェックの申告: お客さんの端末が「スポットから50m以内」
+     * と端末内で判定した結果。座標そのものは受け取らない。
+     * gpsCheck が有効なチェックポイントでは、この申告が無い付与を拒否する。
+     */
+    withinRange?: boolean;
     now?: Date;
   },
 ): Promise<GrantStampResult> {
@@ -417,9 +507,7 @@ export async function grantStamp(
       error: '協賛アカウントはスタンプを押せません',
     };
   }
-  // 認証設定の実施: そのチェックポイントで有効な方法でだけ押せる
-  // （'rotating' の実施は PR-D。ここでは保存済み設定に対する
-  // 'staff' / 'placed' の許可だけを見る）。
+  // 認証設定の実施: そのチェックポイントで有効な方法でだけ押せる。
   const method = input.method ?? 'shop-qr';
   if (method === 'shop-qr' && !input.exhibitor.stampMethods.includes('staff')) {
     return {
@@ -433,6 +521,27 @@ export async function grantStamp(
       ok: false,
       status: 403,
       error: 'このチェックポイントでは、置きQRは有効になっていません',
+    };
+  }
+  if (method === 'rotating' && !input.exhibitor.stampMethods.includes('rotating')) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'このチェックポイントでは、回転QRは有効になっていません',
+    };
+  }
+  // GPSエリアチェックの実施: お客さんが読む方式で、チェックが有効な
+  // チェックポイントでは「50m以内」の端末申告が無い付与を拒否する。
+  if (
+    method !== 'shop-qr' &&
+    input.exhibitor.gpsCheck &&
+    input.withinRange !== true
+  ) {
+    return {
+      ok: false,
+      status: 403,
+      code: 'gps-check-failed',
+      error: 'スポットの近くで読み込んでください（位置情報の確認ができませんでした）',
     };
   }
   const event = await getEvent(input.eventId);
@@ -517,6 +626,46 @@ export async function grantStamp(
               : `順番が違います。次は${decision.nextNumber}番のチェックポイントです`,
           nextCheckpointNumber: decision.nextNumber,
         } as GrantStampResult;
+      }
+    }
+
+    // 移動速度チェック: お客さんが読む方式で、チェックが有効な
+    // チェックポイントだけに適用する（店読み取りには適用しない）。
+    // 直近の前回スタンプ（別チェックポイント）からの移動があり得ない
+    // 速さなら拒否する。座標が無い・前回が無い場合は判定できないため通す。
+    if (method !== 'shop-qr' && input.exhibitor.velocityCheck) {
+      let previous: { exhibitorId: string; atMs: number } | null = null;
+      for (const doc of allStampsSnap.docs) {
+        const data = doc.data();
+        const prevExhibitorId = String(data.exhibitorId ?? '');
+        if (!prevExhibitorId || prevExhibitorId === input.exhibitor.id) {
+          continue;
+        }
+        const atMs = grantedAtMillis(data.grantedAt);
+        if (atMs === null) continue;
+        if (!previous || atMs > previous.atMs) {
+          previous = { exhibitorId: prevExhibitorId, atMs };
+        }
+      }
+      if (previous) {
+        const [currentSnap, previousSnap] = await Promise.all([
+          tx.get(exhibitorsRef(db, input.eventId).doc(input.exhibitor.id)),
+          tx.get(exhibitorsRef(db, input.eventId).doc(previous.exhibitorId)),
+        ]);
+        const decision = evaluateStampVelocity({
+          previousLocation: checkpointLocationFromData(previousSnap.data()),
+          previousAtMs: previous.atMs,
+          currentLocation: checkpointLocationFromData(currentSnap.data()),
+          nowMs: (input.now ?? new Date()).getTime(),
+        });
+        if (!decision.allowed) {
+          return {
+            ok: false,
+            status: 403,
+            code: 'too-fast',
+            error: '移動が速すぎるため、このスタンプは付けられませんでした',
+          } as GrantStampResult;
+        }
       }
     }
 
@@ -625,13 +774,25 @@ export async function grantStamp(
   });
 }
 
-// ─── 場所QR（お客さん本人からの付与） ───
+// ─── 場所QR・回転QR（お客さん本人からの付与） ───
 
 function exhibitorsRef(db: Firestore, eventId: string) {
   return db
     .collection('events')
     .doc(eventId)
     .collection(EVENT_EXHIBITORS_COLLECTION);
+}
+
+/**
+ * チェックポイントの座標を exhibitor ドキュメントのデータから読む。
+ * 座標は店舗プロフィールの location（住所からジオコーディング済み）が正。
+ * プロフィールが無い・座標が無いチェックポイントは null。
+ */
+function checkpointLocationFromData(
+  data: FirebaseFirestore.DocumentData | undefined,
+): GeoPoint | null {
+  if (!data) return null;
+  return parseShopProfile(data.profile).location;
 }
 
 /** スポットとして使えない参加店（閉店・掲載停止）のガード。 */
@@ -650,13 +811,33 @@ function grantableSpotError(
   return null;
 }
 
+/** stampCode からチェックポイントを引く。見つからなければ null。 */
+async function findExhibitorByStampCode(
+  db: Firestore,
+  eventId: string,
+  stampCode: string,
+): Promise<EventExhibitor | null> {
+  const snap = await exhibitorsRef(db, eventId)
+    .where('stampCode', '==', stampCode)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  return mapExhibitor(snap.docs[0].id, snap.docs[0].data());
+}
+
 /**
  * 場所QR方式の付与。stampCode からスポットを特定し、共通の grantStamp に
  * 合流する。コードの形式が不正なら照合自体を行わない。
  */
 export async function grantStampByPlacedQr(
   db: Firestore,
-  input: { eventId: string; memberId: string; stampCode: unknown },
+  input: {
+    eventId: string;
+    memberId: string;
+    stampCode: unknown;
+    /** GPSエリアチェックの端末申告（50m以内） */
+    withinRange?: boolean;
+  },
 ): Promise<GrantStampResult> {
   if (!isValidStampCode(input.stampCode)) {
     return {
@@ -665,18 +846,18 @@ export async function grantStampByPlacedQr(
       error: 'QRコードが正しくありません',
     };
   }
-  const snap = await exhibitorsRef(db, input.eventId)
-    .where('stampCode', '==', input.stampCode)
-    .limit(1)
-    .get();
-  if (snap.empty) {
+  const exhibitor = await findExhibitorByStampCode(
+    db,
+    input.eventId,
+    input.stampCode,
+  );
+  if (!exhibitor) {
     return {
       ok: false,
       status: 404,
       error: 'このQRコードのスポットが見つかりません',
     };
   }
-  const exhibitor = mapExhibitor(snap.docs[0].id, snap.docs[0].data());
   const spotError = grantableSpotError(exhibitor);
   if (spotError) return { ok: false, ...spotError };
   return grantStamp(db, {
@@ -684,6 +865,160 @@ export async function grantStampByPlacedQr(
     exhibitor,
     memberId: input.memberId,
     method: 'placed-qr',
+    withinRange: input.withinRange,
+  });
+}
+
+/**
+ * お客さんが読む方式の事前情報。参加者画面が付与の前に呼び、
+ * GPSエリアチェックが必要かどうかと、端末内判定に使う座標を得る。
+ * 座標はチェックが必要な場合だけ返す（判定以外に使わない）。
+ */
+export interface CheckpointScanInfo {
+  exhibitorId: string;
+  exhibitorName: string;
+  kind: ExhibitorKind;
+  gpsCheck: boolean;
+  location: GeoPoint | null;
+}
+
+export type CheckpointScanInfoResult =
+  | { ok: true; info: CheckpointScanInfo }
+  | { ok: false; status: number; error: string };
+
+async function buildScanInfo(
+  db: Firestore,
+  eventId: string,
+  exhibitor: EventExhibitor,
+): Promise<CheckpointScanInfo> {
+  let location: GeoPoint | null = null;
+  if (exhibitor.gpsCheck) {
+    const snap = await exhibitorsRef(db, eventId).doc(exhibitor.id).get();
+    location = checkpointLocationFromData(
+      snap.exists ? snap.data() : undefined,
+    );
+  }
+  return {
+    exhibitorId: exhibitor.id,
+    exhibitorName: exhibitor.name,
+    kind: exhibitor.kind,
+    gpsCheck: exhibitor.gpsCheck,
+    location,
+  };
+}
+
+/** 場所QRの事前情報。 */
+export async function getPlacedQrCheckpointInfo(
+  db: Firestore,
+  input: { eventId: string; stampCode: unknown },
+): Promise<CheckpointScanInfoResult> {
+  if (!isValidStampCode(input.stampCode)) {
+    return { ok: false, status: 400, error: 'QRコードが正しくありません' };
+  }
+  const exhibitor = await findExhibitorByStampCode(
+    db,
+    input.eventId,
+    input.stampCode,
+  );
+  if (!exhibitor) {
+    return {
+      ok: false,
+      status: 404,
+      error: 'このQRコードのスポットが見つかりません',
+    };
+  }
+  const spotError = grantableSpotError(exhibitor);
+  if (spotError) return { ok: false, ...spotError };
+  return { ok: true, info: await buildScanInfo(db, input.eventId, exhibitor) };
+}
+
+/**
+ * 回転QRのコードを検証し、対象チェックポイントを解決する。
+ * 署名・鮮度が不正なコードはすべて同じエラーに倒す（詳細を漏らさない）。
+ */
+async function resolveRotatingExhibitor(
+  db: Firestore,
+  eventId: string,
+  token: unknown,
+  nowMs: number,
+): Promise<
+  | { ok: true; exhibitor: EventExhibitor }
+  | { ok: false; status: number; error: string }
+> {
+  const parsed = parseRotatingCode(token);
+  if (!parsed) {
+    return { ok: false, status: 400, error: 'QRコードが正しくありません' };
+  }
+  const snap = await exhibitorsRef(db, eventId).doc(parsed.exhibitorId).get();
+  if (!snap.exists) {
+    return {
+      ok: false,
+      status: 404,
+      error: 'このQRコードのスポットが見つかりません',
+    };
+  }
+  const exhibitor = mapExhibitor(snap.id, snap.data()!);
+  const spotError = grantableSpotError(exhibitor);
+  if (spotError) return { ok: false, ...spotError };
+  const secret = await readExhibitorRotatingSecret(db, eventId, exhibitor.id);
+  if (!secret || !verifyRotatingCode(secret, eventId, token, nowMs)) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'QRコードの有効期限が切れています。画面の新しいコードを読み込んでください',
+    };
+  }
+  return { ok: true, exhibitor };
+}
+
+/** 回転QRの事前情報。 */
+export async function getRotatingCheckpointInfo(
+  db: Firestore,
+  input: { eventId: string; token: unknown; now?: Date },
+): Promise<CheckpointScanInfoResult> {
+  const resolved = await resolveRotatingExhibitor(
+    db,
+    input.eventId,
+    input.token,
+    (input.now ?? new Date()).getTime(),
+  );
+  if (!resolved.ok) return resolved;
+  return {
+    ok: true,
+    info: await buildScanInfo(db, input.eventId, resolved.exhibitor),
+  };
+}
+
+/**
+ * 回転QR方式の付与。コードの署名と鮮度を検証してから、共通の
+ * grantStamp に合流する（方法の許可・追加チェックも grantStamp 側）。
+ */
+export async function grantStampByRotatingQr(
+  db: Firestore,
+  input: {
+    eventId: string;
+    memberId: string;
+    token: unknown;
+    /** GPSエリアチェックの端末申告（50m以内） */
+    withinRange?: boolean;
+    now?: Date;
+  },
+): Promise<GrantStampResult> {
+  const now = input.now ?? new Date();
+  const resolved = await resolveRotatingExhibitor(
+    db,
+    input.eventId,
+    input.token,
+    now.getTime(),
+  );
+  if (!resolved.ok) return resolved;
+  return grantStamp(db, {
+    eventId: input.eventId,
+    exhibitor: resolved.exhibitor,
+    memberId: input.memberId,
+    method: 'rotating',
+    withinRange: input.withinRange,
+    now,
   });
 }
 
