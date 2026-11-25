@@ -549,7 +549,7 @@ export default function EventBillingAdminPage() {
       email={user.email}
       onLogout={() => void signOut(auth)}
       languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
-      nav={<AdminNav eventId={eventId} eventName={eventName} current="⑦" locale={locale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current="billing" locale={locale} />}
     >
       <h1 style={adminPageTitleStyle}>{adminText(locale, 'billingPageTitle')}</h1>
       <CapWarningBanner locale={locale} />

@@ -402,7 +402,7 @@ export default function EventPushRequestsAdminPage() {
       email={user.email}
       onLogout={() => void signOut(auth)}
       languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
-      nav={<AdminNav eventId={eventId} eventName={eventName} current="⑩" locale={locale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current="push-requests" locale={locale} />}
     >
       <h1 style={adminPageTitleStyle}>{adminText(locale, 'pushRequestsPageTitle')}</h1>
       <CapWarningBanner locale={locale} />

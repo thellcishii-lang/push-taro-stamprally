@@ -300,22 +300,22 @@ export function AdminNav({
         // 特設サイト編集は公開ページの表示内容（紹介文・ヒーロー画像・
         // 追加事項）を編集する画面。下の外部リンク（公開ページそのもの）
         // とは別物なので、並べて置く。
-        { type: 'item', key: '⑧', href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit'), icon: siteEditIcon },
+        { type: 'item', key: 'site', href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit'), icon: siteEditIcon },
         // クーポン・特典の管理はポータル有効時はポータル側。アプリ側の
         // 項目（下）はグレーアウトする。
         {
           type: 'item',
-          key: '③P',
+          key: 'coupons-portal',
           href: couponsHref,
           label: adminText(locale, 'navCouponsBenefits'),
           icon: couponsIcon,
           disabled: !portalEnabled,
           note: !portalEnabled ? adminText(locale, 'couponsManagedOnApp') : undefined,
         },
-        { type: 'item', key: '④', href: `/event-admin/${eventId}/reviews`, label: adminText(locale, 'navReviews'), icon: reviewsIcon },
-        { type: 'item', key: '⑨', href: `/event-admin/${eventId}/ads`, label: adminText(locale, 'navAds'), icon: adsIcon },
-        { type: 'item', key: '⑤', href: `/event-admin/${eventId}/social`, label: adminText(locale, 'navSocial'), icon: socialIcon },
-        { type: 'item', key: '⑪', href: `/event-admin/${eventId}/report`, label: adminText(locale, 'navActionReport'), icon: reportIcon },
+        { type: 'item', key: 'reviews', href: `/event-admin/${eventId}/reviews`, label: adminText(locale, 'navReviews'), icon: reviewsIcon },
+        { type: 'item', key: 'ads', href: `/event-admin/${eventId}/ads`, label: adminText(locale, 'navAds'), icon: adsIcon },
+        { type: 'item', key: 'social', href: `/event-admin/${eventId}/social`, label: adminText(locale, 'navSocial'), icon: socialIcon },
+        { type: 'item', key: 'report', href: `/event-admin/${eventId}/report`, label: adminText(locale, 'navActionReport'), icon: reportIcon },
         // 特設サイトは本家（push-taro.com）上の公開ページ。宣伝に使う
         // URL へすぐ飛べるよう、ポータル末尾に外部リンクとして置く。
         {
@@ -327,24 +327,24 @@ export function AdminNav({
           external: true,
         },
         { type: 'heading', key: '見出しアプリ', label: adminText(locale, 'navAppGroup') },
-        { type: 'item', key: '①', href: `/event-admin/${eventId}/push`, label: adminText(locale, 'navPush'), icon: pushIcon },
-        { type: 'item', key: '②', href: `/event-admin/${eventId}/schedule`, label: adminText(locale, 'navSchedule'), icon: scheduleIcon },
+        { type: 'item', key: 'push', href: `/event-admin/${eventId}/push`, label: adminText(locale, 'navPush'), icon: pushIcon },
+        { type: 'item', key: 'schedule', href: `/event-admin/${eventId}/schedule`, label: adminText(locale, 'navSchedule'), icon: scheduleIcon },
         // ポータル有効時はアプリ側のクーポン・特典はグレーアウトし、
         // 管理がポータル側であることを出す。
         {
           type: 'item',
-          key: '③',
+          key: 'coupons',
           href: couponsHref,
           label: adminText(locale, 'navCouponsBenefits'),
           icon: couponsIcon,
           disabled: portalEnabled,
           note: portalEnabled ? adminText(locale, 'couponsManagedOnPortal') : undefined,
         },
-        { type: 'item', key: '⑩', href: `/event-admin/${eventId}/push-requests`, label: adminText(locale, 'navPushRequests'), icon: pushIcon },
+        { type: 'item', key: 'push-requests', href: `/event-admin/${eventId}/push-requests`, label: adminText(locale, 'navPushRequests'), icon: pushIcon },
         // 課金は別料金オプション。ナビは常時出し、オプション OFF の
         // 契約では課金ページ側で案内文を出す（API が 404 を返す）。
-        { type: 'item', key: '⑦', href: `/event-admin/${eventId}/billing`, label: adminText(locale, 'navBilling'), icon: billingIcon },
-        { type: 'item', key: '⑥', href: `/event-admin/${eventId}/settings`, label: adminText(locale, 'navConfig'), icon: gearIcon },
+        { type: 'item', key: 'billing', href: `/event-admin/${eventId}/billing`, label: adminText(locale, 'navBilling'), icon: billingIcon },
+        { type: 'item', key: 'settings', href: `/event-admin/${eventId}/settings`, label: adminText(locale, 'navConfig'), icon: gearIcon },
       ]
     : [
         { type: 'item', key: '設定', href: '/event-admin', label: adminText(locale, 'navSettings'), icon: settingsIcon },

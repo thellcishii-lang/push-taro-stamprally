@@ -331,7 +331,7 @@ export default function EventAdsAdminPage() {
       email={user.email}
       onLogout={() => void signOut(auth)}
       languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
-      nav={<AdminNav eventId={eventId} eventName={eventName} current="⑨" locale={locale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current="ads" locale={locale} />}
     >
       <h1 style={adminPageTitleStyle}>{adminText(locale, 'adsPageTitle')}</h1>
       <CapWarningBanner locale={locale} />

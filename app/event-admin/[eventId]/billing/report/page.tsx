@@ -260,7 +260,7 @@ export default function BillingReportPage() {
       email={user.email}
       onLogout={() => void signOut(auth)}
       languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
-      nav={<AdminNav eventId={eventId} eventName={eventName} current="⑦" locale={locale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current="billing" locale={locale} />}
     >
       <style>{`
         @media print {
