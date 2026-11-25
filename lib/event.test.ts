@@ -241,12 +241,13 @@ describe('subscriberUsage', () => {
 });
 
 describe('スタンプ達成個数（stampGoalCount）', () => {
-  it('1〜10 の整数だけが有効', () => {
+  it('1〜200 の整数だけが有効', () => {
     expect(isValidStampGoalCount(1)).toBe(true);
     expect(isValidStampGoalCount(5)).toBe(true);
     expect(isValidStampGoalCount(10)).toBe(true);
+    expect(isValidStampGoalCount(200)).toBe(true);
     expect(isValidStampGoalCount(0)).toBe(false);
-    expect(isValidStampGoalCount(11)).toBe(false);
+    expect(isValidStampGoalCount(201)).toBe(false);
     expect(isValidStampGoalCount(2.5)).toBe(false);
     expect(isValidStampGoalCount('5')).toBe(false);
     expect(isValidStampGoalCount(undefined)).toBe(false);
@@ -256,7 +257,7 @@ describe('スタンプ達成個数（stampGoalCount）', () => {
     expect(parseStampGoalCount(3)).toBe(3);
     expect(parseStampGoalCount(undefined)).toBe(5);
     expect(parseStampGoalCount(0)).toBe(5);
-    expect(parseStampGoalCount(99)).toBe(5);
+    expect(parseStampGoalCount(201)).toBe(5);
     expect(parseStampGoalCount('3')).toBe(5);
   });
 });

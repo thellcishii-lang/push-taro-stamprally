@@ -329,7 +329,7 @@ export default function ActionReportPage() {
       email={user.email}
       onLogout={() => void signOut(auth)}
       languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
-      nav={<AdminNav eventId={eventId} eventName={eventName} current="⑪" locale={locale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current="report" locale={locale} />}
     >
       <style>{`
         @media print {

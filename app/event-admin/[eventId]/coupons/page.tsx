@@ -1,9 +1,9 @@
 'use client';
 
 // app/event-admin/[eventId]/coupons/page.tsx
-// Push-taro.スタンプラリー 主催者向けのクーポン管理画面（管理画面③）。
+// Push-taro.スタンプラリー 主催者向けのクーポン管理画面。
 // 出店者（会社）の登録と、クーポンの登録・一覧を行う。クーポンはプロジェクト全体で上限あり。
-// 案内PDFの管理は設定画面（④）に移した（2026-11-11）。
+// 案内PDFの管理は設定画面に移した（2026-11-11）。
 // 画面の固定文は4言語辞書（lib/ui-text.ts の ADMIN_TEXT）。
 // 見た目は承認済みモック準拠。ログイン後は共通シェル（components/AdminShell）
 // を使い、PC は左サイドバー固定の2カラム、スマホはアコーディオンになる。
@@ -154,7 +154,7 @@ export default function EventCouponAdminPage() {
   const [couponCap, setCouponCap] = useState(100);
   const [eventName, setEventName] = useState('');
   // ポータル（特設サイト本契約）が有効なら管理場所はポータル側。
-  // ナビの現在地（③P / ③）の切り替えに使う。
+  // ナビの現在地（ポータル側 / アプリ側）の切り替えに使う。
   const [portalEnabled, setPortalEnabled] = useState(false);
   const [exhibitorName, setExhibitorName] = useState('');
   const [exhibitorEmail, setExhibitorEmail] = useState('');
@@ -507,7 +507,7 @@ export default function EventCouponAdminPage() {
       email={user.email}
       onLogout={() => void signOut(auth)}
       languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
-      nav={<AdminNav eventId={eventId} eventName={eventName} current={portalEnabled ? '③P' : '③'} locale={locale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current={portalEnabled ? 'coupons-portal' : 'coupons'} locale={locale} />}
     >
       <h1 style={adminPageTitleStyle}>{adminText(locale, 'couponsPageTitle')}</h1>
       <CapWarningBanner locale={locale} />

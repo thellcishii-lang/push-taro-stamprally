@@ -35,6 +35,7 @@ import {
 import { adminText, uiText } from '@/lib/ui-text';
 import {
   DEFAULT_REVIEW_CATEGORIES,
+  MAX_STAMP_SLOTS,
   REVIEW_CATEGORY_LABEL_MAX_LENGTH,
   REVIEW_CATEGORY_MAX_COUNT,
   REVIEW_CATEGORY_MIN_COUNT,
@@ -534,7 +535,7 @@ export default function EventSettingsAdminPage() {
       email={user.email}
       onLogout={() => void signOut(auth)}
       languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
-      nav={<AdminNav eventId={eventId} eventName={eventName} current="⑥" locale={locale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current="settings" locale={locale} />}
     >
       <h1 style={adminPageTitleStyle}>{adminText(locale, 'settingsPageTitle')}</h1>
       <CapWarningBanner locale={locale} />
@@ -664,7 +665,7 @@ export default function EventSettingsAdminPage() {
               value={stampGoalCount}
               onChange={(e) => setStampGoalCount(Number(e.target.value))}
             >
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+              {Array.from({ length: MAX_STAMP_SLOTS }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>

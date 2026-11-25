@@ -418,7 +418,7 @@ export default function EventSocialAdminPage() {
       email={user.email}
       onLogout={() => void signOut(auth)}
       languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
-      nav={<AdminNav eventId={eventId} eventName={eventName} current="⑤" locale={locale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current="social" locale={locale} />}
     >
       <h1 style={adminPageTitleStyle}>{adminText(locale, 'socialPageTitle')}</h1>
       <CapWarningBanner locale={locale} />

@@ -512,7 +512,7 @@ export default function SiteEditAdminPage() {
       email={user.email}
       onLogout={() => void signOut(auth)}
       languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
-      nav={<AdminNav eventId={eventId} eventName={eventName} current="⑧" locale={locale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current="site" locale={locale} />}
     >
       <h1 style={adminPageTitleStyle}>{adminText(locale, 'siteEditPageTitle')}</h1>
       <CapWarningBanner locale={locale} />

@@ -292,7 +292,7 @@ export const DEFAULT_RESET_TIME = '00:00';
 /** スタンプラリー: プロジェクトは常設。終了日を持たないことを表す番兵値（終了処理は走らない）。 */
 export const PERMANENT_END_DATE = '9999-12-31';
 /** スタンプカードの枠の最大数（達成個数の上限）。 */
-export const MAX_STAMP_SLOTS = 10;
+export const MAX_STAMP_SLOTS = 200;
 /** スタンプの達成個数の既定値（主催者が未設定のプロジェクト）。 */
 export const DEFAULT_STAMP_GOAL_COUNT = 5;
 /** スタンプ達成特典の種類の既定値（従来の「1軒無料」）。 */
