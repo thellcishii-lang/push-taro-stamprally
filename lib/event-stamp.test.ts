@@ -587,3 +587,179 @@ describe('grantStamp: 順番モードの実施', () => {
     expect(result.ok).toBe(true);
   });
 });
+
+describe('grantStamp: 途中の特典（マイルストーン）', () => {
+  function freeCouponDocs(store: Map<string, DocData>) {
+    return [...store.entries()]
+      .filter(([path]) =>
+        path.startsWith(`events/${GRANT_EVENT_ID}/freeCoupons/`),
+      )
+      .map(([, data]) => data);
+  }
+
+  function grant(db: Firestore, shopId: string) {
+    return grantStamp(db, {
+      eventId: GRANT_EVENT_ID,
+      exhibitor: fakeExhibitor({ id: shopId, name: shopId }),
+      memberId: 'member-a',
+    });
+  }
+
+  it('到達した時点で特典が発行される（達成特典とは別枠・印つき）', async () => {
+    storeMocks.getEvent.mockResolvedValue(
+      liveEvent({
+        stampGoalCount: 5,
+        stampMilestones: [
+          { count: 2, rewardType: 'free-dish', benefitText: '' },
+        ],
+      }),
+    );
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+
+    const first = await grant(db, 'shop-a');
+    expect(first.ok).toBe(true);
+    if (first.ok) expect(first.milestoneFreeCouponIds).toEqual([]);
+
+    const second = await grant(db, 'shop-b');
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.completed).toBe(false);
+      expect(second.freeCouponId).toBeNull();
+      expect(second.milestoneFreeCouponIds).toHaveLength(1);
+    }
+    const coupons = freeCouponDocs(store);
+    expect(coupons).toHaveLength(1);
+    expect(coupons[0].milestoneCount).toBe(2);
+    expect(coupons[0].kind).toBe('stamp');
+    expect(coupons[0].round).toBe(1);
+    expect(coupons[0].rewardType).toBe('free-dish');
+    expect(coupons[0].status).toBe('active');
+  });
+
+  it('同じラウンドでは二重発行しない（到達後も押すたびに判定して冪等）', async () => {
+    storeMocks.getEvent.mockResolvedValue(
+      liveEvent({
+        stampGoalCount: 5,
+        stampMilestones: [
+          { count: 2, rewardType: 'free-dish', benefitText: '' },
+        ],
+      }),
+    );
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    await grant(db, 'shop-a');
+    await grant(db, 'shop-b');
+    const third = await grant(db, 'shop-c');
+    expect(third.ok).toBe(true);
+    if (third.ok) expect(third.milestoneFreeCouponIds).toEqual([]);
+    expect(freeCouponDocs(store)).toHaveLength(1);
+  });
+
+  it('次のラウンドでは再び発行される', async () => {
+    storeMocks.getEvent.mockResolvedValue(
+      liveEvent({
+        stampGoalCount: 2,
+        stampMilestones: [
+          { count: 1, rewardType: 'free-dish', benefitText: '' },
+        ],
+      }),
+    );
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    // 1周目: 1個目でマイルストーン、2個目で達成
+    await grant(db, 'shop-a');
+    const complete = await grant(db, 'shop-b');
+    expect(complete.ok).toBe(true);
+    if (complete.ok) expect(complete.completed).toBe(true);
+    // 2周目: 1個目でマイルストーンが再発行される
+    const nextRound = await grant(db, 'shop-a');
+    expect(nextRound.ok).toBe(true);
+    if (nextRound.ok) {
+      expect(nextRound.round).toBe(2);
+      expect(nextRound.milestoneFreeCouponIds).toHaveLength(1);
+    }
+    const milestoneCoupons = freeCouponDocs(store).filter(
+      (data) => data.milestoneCount === 1,
+    );
+    expect(milestoneCoupons.map((data) => data.round).sort()).toEqual([1, 2]);
+  });
+
+  it('複数の特典がそれぞれの個数で発行される', async () => {
+    storeMocks.getEvent.mockResolvedValue(
+      liveEvent({
+        stampGoalCount: 5,
+        stampMilestones: [
+          { count: 1, rewardType: 'free-dish', benefitText: '' },
+          { count: 3, rewardType: 'benefit', benefitText: '特製グッズ' },
+        ],
+      }),
+    );
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    const first = await grant(db, 'shop-a');
+    if (first.ok) expect(first.milestoneFreeCouponIds).toHaveLength(1);
+    const second = await grant(db, 'shop-b');
+    if (second.ok) expect(second.milestoneFreeCouponIds).toEqual([]);
+    const third = await grant(db, 'shop-c');
+    if (third.ok) expect(third.milestoneFreeCouponIds).toHaveLength(1);
+    const coupons = freeCouponDocs(store);
+    expect(coupons).toHaveLength(2);
+    const benefitCoupon = coupons.find((data) => data.milestoneCount === 3);
+    // benefit は発行時点のスナップショット（種類と内容）が写る
+    expect(benefitCoupon?.rewardType).toBe('benefit');
+    expect(benefitCoupon?.benefitText).toBe('特製グッズ');
+  });
+
+  it('達成と同じ個数の特典は、達成クーポンと両方発行される', async () => {
+    storeMocks.getEvent.mockResolvedValue(
+      liveEvent({
+        stampGoalCount: 2,
+        stampMilestones: [
+          { count: 2, rewardType: 'free-dish', benefitText: '' },
+        ],
+      }),
+    );
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    await grant(db, 'shop-a');
+    const complete = await grant(db, 'shop-b');
+    expect(complete.ok).toBe(true);
+    if (complete.ok) {
+      expect(complete.completed).toBe(true);
+      expect(complete.freeCouponId).toBeTruthy();
+      expect(complete.milestoneFreeCouponIds).toHaveLength(1);
+    }
+    const coupons = freeCouponDocs(store);
+    expect(coupons).toHaveLength(2);
+    expect(
+      coupons.filter((data) => data.milestoneCount === 2),
+    ).toHaveLength(1);
+    expect(
+      coupons.filter((data) => typeof data.milestoneCount !== 'number'),
+    ).toHaveLength(1);
+  });
+
+  it('カードに特典設定と発行済みクーポンの印が載る', async () => {
+    storeMocks.getEvent.mockResolvedValue(
+      liveEvent({
+        stampGoalCount: 5,
+        stampMilestones: [
+          { count: 2, rewardType: 'free-dish', benefitText: '' },
+          { count: 4, rewardType: 'benefit', benefitText: 'ドリンク1杯' },
+        ],
+      }),
+    );
+    const { db, store } = createStampFakeDb();
+    seedSubscriber(store, 'member-a');
+    await grant(db, 'shop-a');
+    await grant(db, 'shop-b');
+    const card = await getStampCard(db, GRANT_EVENT_ID, 'member-a');
+    expect(card?.milestones).toEqual([
+      { count: 2, rewardType: 'free-dish', benefitText: '' },
+      { count: 4, rewardType: 'benefit', benefitText: 'ドリンク1杯' },
+    ]);
+    expect(card?.freeCoupons).toHaveLength(1);
+    expect(card?.freeCoupons[0].milestoneCount).toBe(2);
+  });
+});

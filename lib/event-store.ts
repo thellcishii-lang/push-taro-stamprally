@@ -24,6 +24,7 @@ import {
   normalizeEventLinks,
   normalizeReviewCategories,
   normalizeStampBenefitText,
+  normalizeStampMilestones,
   normalizeStampRewardType,
   normalizeTopPlacementEnabled,
   normalizeTopPlacementPrice,
@@ -32,6 +33,7 @@ import {
   parseReviewCategories,
   parseStampBenefitText,
   parseStampGoalCount,
+  parseStampMilestones,
   parseStampRewardType,
   parseTopPlacementEnabled,
   parseTopPlacementPrice,
@@ -100,6 +102,8 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     // 達成特典の種類・内容も同様に既定値（従来の「1軒無料」・空）に倒す
     stampRewardType: parseStampRewardType(data.stampRewardType),
     stampBenefitText: parseStampBenefitText(data.stampBenefitText),
+    // 途中の特典も導入前のイベントには項目が無いため空配列に倒す
+    stampMilestones: parseStampMilestones(data.stampMilestones),
     // ランキングの最低レビュー件数も同様に既定値に倒す
     rankingMinReviews: parseRankingMinReviews(data.rankingMinReviews),
     // レビューの項目別評価の項目も同様に既定値（従来の4項目）に倒す
@@ -189,6 +193,8 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
   const stampRewardType = normalizeStampRewardType(input.stampRewardType);
   const stampBenefitText = normalizeStampBenefitText(input.stampBenefitText);
   validateStampRewardSettings(stampRewardType, stampBenefitText);
+  // 途中の特典も同じルールで検証・正規化する
+  const stampMilestones = normalizeStampMilestones(input.stampMilestones);
 
   const ref = db.collection(EVENTS_COLLECTION).doc();
   const data: EventDocData = {
@@ -207,6 +213,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     stampGoalCount: input.stampGoalCount ?? DEFAULT_STAMP_GOAL_COUNT,
     stampRewardType,
     stampBenefitText,
+    stampMilestones,
     // 順番モードは作成時点ではオフ（設定画面で後から有効化する）
     sequentialStamps: input.sequentialStamps ?? false,
     rankingMinReviews: input.rankingMinReviews ?? DEFAULT_RANKING_MIN_REVIEWS,
@@ -440,6 +447,7 @@ export type UpdateEventInput = Partial<
     | 'stampGoalCount'
     | 'stampRewardType'
     | 'stampBenefitText'
+    | 'stampMilestones'
     | 'sequentialStamps'
     | 'rankingMinReviews'
     | 'reviewCategories'
@@ -523,6 +531,11 @@ export async function updateEvent(
     }
     validateStampRewardSettings(mergedType, mergedText);
   }
+  // 途中の特典は検証・正規化してから保存する（個々の組み合わせ検証も含む）
+  const stampMilestones =
+    patch.stampMilestones !== undefined
+      ? normalizeStampMilestones(patch.stampMilestones)
+      : undefined;
   // レビューの項目別評価の項目は検証・正規化してから保存する
   const reviewCategories =
     patch.reviewCategories !== undefined
@@ -616,6 +629,7 @@ export async function updateEvent(
       ...patch,
       ...(stampRewardType !== undefined ? { stampRewardType } : {}),
       ...(stampBenefitText !== undefined ? { stampBenefitText } : {}),
+      ...(stampMilestones !== undefined ? { stampMilestones } : {}),
       ...(reviewCategories !== undefined ? { reviewCategories } : {}),
       ...(links !== undefined ? { links } : {}),
       ...(siteDescription !== undefined ? { siteDescription } : {}),

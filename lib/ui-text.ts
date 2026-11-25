@@ -355,6 +355,24 @@ export const UI_TEXT = {
     zh: '福利兑换券',
     ko: '특전 쿠폰',
   },
+  stampMilestoneRemaining: {
+    ja: 'あと{count}個で、途中の特典がもらえます！',
+    en: '{count} more stamp(s) to earn a milestone reward!',
+    zh: '再集{count}个，即可获得阶段奖励！',
+    ko: '{count}개 더 모으면 중간 특전을 받을 수 있어요!',
+  },
+  stampMilestoneRemainingBenefit: {
+    ja: 'あと{count}個で途中の特典「{benefit}」がもらえます！',
+    en: '{count} more stamp(s) to earn the milestone reward: “{benefit}”!',
+    zh: '再集{count}个，即可获得阶段奖励“{benefit}”！',
+    ko: '{count}개 더 모으면 중간 특전 "{benefit}"을(를) 받을 수 있어요!',
+  },
+  milestoneCouponBadge: {
+    ja: '途中の特典',
+    en: 'Milestone reward',
+    zh: '阶段奖励',
+    ko: '중간 특전',
+  },
   celebrationTitle: {
     ja: 'やったーミッション達成！',
     en: 'You did it! Mission complete!',
@@ -4186,6 +4204,48 @@ export const ADMIN_TEXT = {
     en: 'With “Benefit”, visitors who reach the goal receive a benefit coupon with the text set here instead of a free dish coupon. Coupons already issued do not change when the setting changes.',
     zh: '选择"福利"后，达成目标的顾客将获得此处所设内容的福利兑换券，而不是免费兑换券。已发放的兑换券不会因之后修改设置而改变。',
     ko: '"특전"을 선택하면 달성한 고객에게 무료 쿠폰 대신 여기서 설정한 내용의 특전 쿠폰이 발급됩니다. 이미 발급된 쿠폰은 나중에 설정을 바꿔도 변하지 않습니다.',
+  },
+  stampMilestonesTitle: {
+    ja: '途中の特典',
+    en: 'Milestone rewards',
+    zh: '阶段奖励',
+    ko: '중간 특전',
+  },
+  stampMilestonesNote: {
+    ja: 'スタンプが設定した個数に届いた時点で、その周に1回だけ特典クーポンが自動で発行されます（達成特典とは別枠）。追加できる数に上限はありません。',
+    en: 'When a visitor reaches the stamp count set here, a reward coupon is issued automatically, once per round (separate from the goal reward). There is no limit on how many you can add.',
+    zh: '当印章达到此处设定的数量时，将自动发放奖励兑换券，每轮仅一次（与达成奖励分开计算）。可添加的数量没有上限。',
+    ko: '스탬프가 여기서 설정한 개수에 도달하면 그 라운드에 한 번만 특전 쿠폰이 자동 발급됩니다(달성 특전과는 별도). 추가 개수에 제한은 없습니다.',
+  },
+  stampMilestoneCountLabel: {
+    ja: '個数',
+    en: 'Stamps',
+    zh: '数量',
+    ko: '개수',
+  },
+  stampMilestoneAddButton: {
+    ja: '途中の特典を追加',
+    en: 'Add a milestone reward',
+    zh: '添加阶段奖励',
+    ko: '중간 특전 추가',
+  },
+  stampMilestoneDeleteButton: {
+    ja: '削除',
+    en: 'Remove',
+    zh: '删除',
+    ko: '삭제',
+  },
+  stampMilestoneExceedsGoal: {
+    ja: '目標個数を超えているため、この特典には到達しません',
+    en: 'This exceeds the goal count, so this reward can never be reached.',
+    zh: '已超过目标数量，因此无法达成此奖励。',
+    ko: '목표 개수를 초과하여 이 특전에 도달할 수 없습니다.',
+  },
+  stampMilestoneInvalid: {
+    ja: '途中の特典の個数は1〜200の整数で、同じ個数は1つまでにしてください',
+    en: 'Milestone counts must be whole numbers from 1 to 200, with no duplicates.',
+    zh: '阶段奖励的数量必须是1〜200的整数，且不能重复。',
+    ko: '중간 특전 개수는 1~200의 정수로, 중복 없이 입력해 주세요.',
   },
   rankingSettingsTitle: {
     ja: 'ランキング設定',

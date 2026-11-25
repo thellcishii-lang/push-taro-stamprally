@@ -131,6 +131,8 @@ interface MemberFreeCoupon {
   round: number;
   /** 発行元（'stamp' | 'login'。旧データでは未設定 = 'stamp'） */
   kind?: string;
+  /** 途中の特典として発行された場合の到達個数（それ以外は未設定） */
+  milestoneCount?: number | null;
   /** 発行時点の特典スナップショット（旧データでは未設定 = 'free-dish'） */
   rewardType?: string;
   benefitText?: string;
@@ -155,6 +157,12 @@ interface MemberStampCard {
   /** プロジェクトの現在の特典設定（旧データでは未設定 = 'free-dish'） */
   rewardType?: string;
   benefitText?: string;
+  /** 途中の特典の設定（旧データでは未設定 = なし） */
+  milestones?: Array<{
+    count: number;
+    rewardType?: string;
+    benefitText?: string;
+  }>;
   countInRound: number;
   remaining: number;
   stamps: Array<{
@@ -2589,6 +2597,30 @@ export default function EventVisitorPage() {
                         })}
                   </p>
                 )}
+                {(stampCard.milestones ?? [])
+                  .filter((m) => m.count > stampCard.countInRound)
+                  .sort((a, b) => a.count - b.count)
+                  .slice(0, 1)
+                  .map((next) => (
+                    <p
+                      key={next.count}
+                      style={{
+                        fontSize: 13.5,
+                        color: '#475569',
+                        textAlign: 'center',
+                        margin: '4px 0 0',
+                      }}
+                    >
+                      {next.rewardType === 'benefit' && next.benefitText
+                        ? uiText(locale, 'stampMilestoneRemainingBenefit', {
+                            count: String(next.count - stampCard.countInRound),
+                            benefit: next.benefitText,
+                          })
+                        : uiText(locale, 'stampMilestoneRemaining', {
+                            count: String(next.count - stampCard.countInRound),
+                          })}
+                    </p>
+                  ))}
                 <div
                   style={{
                     marginTop: 14,
@@ -2669,6 +2701,20 @@ export default function EventVisitorPage() {
                           })}
                         </span>
                       )}
+                      {typeof freeCoupon.milestoneCount === 'number' && (
+                        <span
+                          style={{
+                            backgroundColor: '#ede9fe',
+                            color: '#6d28d9',
+                            borderRadius: 6,
+                            padding: '3px 10px',
+                            fontWeight: 700,
+                            fontSize: 12,
+                          }}
+                        >
+                          {uiText(locale, 'milestoneCouponBadge')}
+                        </span>
+                      )}
                     </div>
                     {freeCoupon.kind !== 'login' && freeCoupon.rewardType === 'benefit' && freeCoupon.benefitText && (
                       <p
@@ -2739,6 +2785,20 @@ export default function EventVisitorPage() {
                             ? uiText(locale, 'benefitCouponTitle')
                             : uiText(locale, 'freeCouponTitle')}
                       </span>
+                      {typeof freeCoupon.milestoneCount === 'number' && (
+                        <span
+                          style={{
+                            backgroundColor: '#e5e7eb',
+                            color: '#6d28d9',
+                            borderRadius: 6,
+                            padding: '3px 10px',
+                            fontWeight: 700,
+                            fontSize: 12,
+                          }}
+                        >
+                          {uiText(locale, 'milestoneCouponBadge')}
+                        </span>
+                      )}
                     </div>
                     {freeCoupon.kind !== 'login' && freeCoupon.rewardType === 'benefit' && freeCoupon.benefitText && (
                       <p style={{ fontSize: 13, margin: '6px 0 0', color: '#6b7280' }}>
