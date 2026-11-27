@@ -403,6 +403,18 @@ export const UI_TEXT = {
     zh: '阶段奖励',
     ko: '중간 특전',
   },
+  stampSlotMilestoneBadge: {
+    ja: '特典',
+    en: 'Bonus',
+    zh: '奖励',
+    ko: '특전',
+  },
+  stampSlotGoalBadge: {
+    ja: 'ゴール',
+    en: 'GOAL',
+    zh: '终点',
+    ko: '골',
+  },
   celebrationTitle: {
     ja: 'やったーミッション達成！',
     en: 'You did it! Mission complete!',

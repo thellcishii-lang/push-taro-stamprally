@@ -2643,17 +2643,24 @@ export default function EventVisitorPage() {
                 >
                   {Array.from({ length: stampCard.goalCount }, (_, i) => {
                     const stamp = stampCard.stamps[i];
+                    const slotNumber = i + 1;
+                    const isGoalSlot = slotNumber === stampCard.goalCount;
+                    const isMilestoneSlot =
+                      !isGoalSlot &&
+                      (stampCard.milestones ?? []).some((m) => m.count === slotNumber);
+                    const hasSlotTag = isGoalSlot || isMilestoneSlot;
                     return (
                       <div
                         key={i}
                         style={{
+                          position: 'relative',
                           border: stamp
                             ? `2px solid ${VIOLET}`
                             : '2px dashed #cbd5e1',
                           backgroundColor: stamp ? SOFT_BG : '#ffffff',
                           borderRadius: 12,
                           minHeight: 62,
-                          padding: '8px 6px',
+                          padding: hasSlotTag ? '8px 6px 22px' : '8px 6px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -2726,6 +2733,28 @@ export default function EventVisitorPage() {
                         ) : (
                           <span style={{ fontSize: 16, color: '#cbd5e1', fontWeight: 800 }}>
                             {i + 1}
+                          </span>
+                        )}
+                        {hasSlotTag && (
+                          <span
+                            style={{
+                              position: 'absolute',
+                              left: '50%',
+                              transform: 'translateX(-50%)',
+                              bottom: 5,
+                              fontSize: 9.5,
+                              fontWeight: 800,
+                              padding: '1px 7px',
+                              borderRadius: 999,
+                              whiteSpace: 'nowrap',
+                              backgroundColor: isGoalSlot ? '#dc2626' : '#f59e0b',
+                              color: isGoalSlot ? '#ffffff' : '#451a03',
+                            }}
+                          >
+                            {uiText(
+                              locale,
+                              isGoalSlot ? 'stampSlotGoalBadge' : 'stampSlotMilestoneBadge',
+                            )}
                           </span>
                         )}
                       </div>
