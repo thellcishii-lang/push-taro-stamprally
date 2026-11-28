@@ -210,14 +210,14 @@ export interface EventConfig {
   /**
    * 毎日ログインボーナスを有効にするか。主催者がプロジェクト設定で
    * 設定する。既定オフ。オンの間、来場者は来場者画面で毎日1回
-   * チェックインでき、累計 loginBonusDays 日で「好きな店で使える」
+   * チェックインでき、連続 loginBonusDays 日で「好きな店で使える」
    * ログインボーナスクーポンが発行される（実体は lib/event-login.ts）。
    * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
    * オフに倒す。
    */
   loginBonusEnabled: boolean;
   /**
-   * ログインボーナスの達成日数（累計・LOGIN_BONUS_DAYS_MIN〜
+   * ログインボーナスの達成日数（連続・LOGIN_BONUS_DAYS_MIN〜
    * LOGIN_BONUS_DAYS_MAX の整数）。主催者がプロジェクトごとに設定する。
    * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
    * DEFAULT_LOGIN_BONUS_DAYS に倒す。
@@ -847,7 +847,7 @@ export function normalizeReviewCategories(input: unknown): string[] {
   return (input as string[]).map((label) => label.trim());
 }
 
-/** ログインボーナスの達成日数の下限・上限（累計日数）。 */
+/** ログインボーナスの達成日数の下限・上限（連続日数）。 */
 export const LOGIN_BONUS_DAYS_MIN = 5;
 export const LOGIN_BONUS_DAYS_MAX = 20;
 /** ログインボーナスの達成日数の既定値（主催者が未設定のプロジェクト）。 */

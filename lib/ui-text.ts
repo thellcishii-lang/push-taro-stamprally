@@ -458,10 +458,10 @@ export const UI_TEXT = {
     ko: '매일 로그인 보너스',
   },
   loginBonusNote: {
-    ja: 'お店に行かなくても大丈夫。毎日開いてボタンを押すだけで、クーポンがもらえます！',
-    en: 'No shop visit needed. Just open this page every day and tap the button to earn a coupon!',
-    zh: '不用去店里。每天打开页面点一下按钮，就能获得优惠券！',
-    ko: '가게에 가지 않아도 돼요. 매일 열어서 버튼만 누르면 쿠폰을 받을 수 있어요!',
+    ja: 'お店に行かなくても大丈夫。毎日開いてボタンを押すだけで、クーポンがもらえます！1日でも開けない日があると、数え直しになります。',
+    en: 'No shop visit needed. Just open this page every day and tap the button to earn a coupon! If you miss a day, the count starts over.',
+    zh: '不用去店里。每天打开页面点一下按钮，就能获得优惠券！如果有一天没打开，就会重新计数。',
+    ko: '가게에 가지 않아도 돼요. 매일 열어서 버튼만 누르면 쿠폰을 받을 수 있어요! 하루라도 열지 않으면 처음부터 다시 세어요.',
   },
   loginBonusProgress: {
     ja: '{count} / {goal} 日',
@@ -3936,10 +3936,10 @@ export const ADMIN_TEXT = {
     ko: '로그인 보너스 설정',
   },
   loginBonusNote: {
-    ja: '来場者が毎日アプリを開いてボタンを押すと、累計の日数で「好きな店で使えるクーポン」が発行されます。お店に来なくても貯まります。',
-    en: 'When visitors open the app and tap the button each day, a coupon usable at any shop is issued after the set number of days in total. No shop visit is needed to save up.',
-    zh: '顾客每天打开应用点一下按钮，累计达到设定天数后即可获得"任意店铺可用优惠券"。不用到店也能攒。',
-    ko: '고객이 매일 앱을 열어 버튼을 누르면 누적 일수에 따라 "좋아하는 가게에서 쓸 수 있는 쿠폰"이 발급됩니다. 가게에 오지 않아도 모을 수 있습니다.',
+    ja: '来場者が毎日アプリを開いてボタンを押すと、連続の日数で「好きな店で使えるクーポン」が発行されます。1日でも開けない日があると数え直しになります。お店に来なくても貯まります。',
+    en: 'When visitors open the app and tap the button every day, a coupon usable at any shop is issued after the set number of consecutive days. Missing a day restarts the count. No shop visit is needed.',
+    zh: '顾客每天打开应用点一下按钮，连续达到设定天数后即可获得"任意店铺可用优惠券"。有一天没打开就会重新计数。不用到店也能攒。',
+    ko: '고객이 매일 앱을 열어 버튼을 누르면 연속 일수에 따라 "좋아하는 가게에서 쓸 수 있는 쿠폰"이 발급됩니다. 하루라도 열지 않으면 처음부터 다시 세어요. 가게에 오지 않아도 모을 수 있습니다.',
   },
   loginBonusEnabledLabel: {
     ja: 'ログインボーナスを有効にする',
@@ -3948,10 +3948,10 @@ export const ADMIN_TEXT = {
     ko: '로그인 보너스 활성화',
   },
   loginBonusDaysLabel: {
-    ja: '達成日数（累計・5〜20日）',
-    en: 'Days needed (total, 5–20)',
-    zh: '达成天数（累计・5〜20天）',
-    ko: '달성 일수(누적・5~20일)',
+    ja: '達成日数（連続・5〜20日）',
+    en: 'Days needed (in a row, 5–20)',
+    zh: '达成天数（连续・5〜20天）',
+    ko: '달성 일수(연속・5~20일)',
   },
   loginBonusSaveButton: {
     ja: 'ログインボーナス設定を保存',

@@ -2,8 +2,9 @@
 // Push-taro.スタンプラリー の毎日ログインボーナス基盤（events/{eventId} 配下）。
 //
 // - 来場者はお店に行かなくても、来場者画面を開いてチェックインボタンを
-//   押すだけでよい。1日（JST）1回まで数え、連続でなく累計で数える。
-// - 累計がプロジェクト設定の達成日数（loginBonusDays、5〜20）に届くと、
+//   押すだけでよい。1日（JST）1回まで数え、連続した日数で数える。
+//   1日でも空くと連続が途切れ、その日のチェックインから数え直しになる。
+// - 連続日数がプロジェクト設定の達成日数（loginBonusDays、5〜20）に届くと、
 //   スタンプ達成と同じ freeCoupons に kind='login' のクーポンを発行し、
 //   カウンタは自動でリセットされて次のサイクルが始まる。
 // - 状態は購読者ドキュメント（subscribers/{memberId}）のトップレベル項目
@@ -93,11 +94,19 @@ export interface CheckinEvaluation {
   issuedCycles: number[];
 }
 
+/** JST 日付文字列（'YYYY-MM-DD'）の前日を返す。 */
+function prevJstDateString(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * チェックインの状態遷移（純粋関数）。
- * - 今日まだ数えていなければ +1 し、最終日を今日にする（冪等: 同じ日の
- *   再実行では増えない）。
- * - そのうえで、累計が目標日数以上なら達成としてクーポン発行分を
+ * - 今日まだ数えていなければ、最終チェックイン日が昨日のときだけ +1
+ *   する（連続）。昨日でなければ連続が途切れているので、その日を
+ *   1日目として数え直す（冪等: 同じ日の再実行では増えない）。
+ * - そのうえで、連続日数が目標日数以上なら達成としてクーポン発行分を
  *   切り出し、カウンタから目標日数を引く（サイクルが自動で回る）。
  *   すでに数えた日に目標日数を下げていた場合も、ここで達成が確定する。
  */
@@ -107,7 +116,19 @@ export function evaluateCheckin(
   goalDays: number,
 ): CheckinEvaluation {
   const alreadyCheckedIn = state.lastCheckinDate === todayJst;
-  let count = state.countInCycle + (alreadyCheckedIn ? 0 : 1);
+  let count: number;
+  if (alreadyCheckedIn) {
+    count = state.countInCycle;
+  } else if (
+    state.lastCheckinDate !== null &&
+    state.lastCheckinDate === prevJstDateString(todayJst)
+  ) {
+    // 昨日もチェックインしているので連続が続く
+    count = state.countInCycle + 1;
+  } else {
+    // 初回、または1日以上空いて連続が途切れたので数え直し
+    count = 1;
+  }
   let cyclesCompleted = state.cyclesCompleted;
   let totalEarned = state.totalEarned;
   const issuedCycles: number[] = [];
@@ -133,7 +154,7 @@ export function evaluateCheckin(
 export interface LoginBonusView {
   /** プロジェクトで有効かどうか */
   enabled: boolean;
-  /** 達成に必要な累計日数 */
+  /** 達成に必要な連続日数 */
   goalDays: number;
   /** 現在のサイクルで数えた日数 */
   countInCycle: number;
