@@ -77,7 +77,7 @@ export function parseBillingPaymentKind(value: unknown): BillingPaymentKind {
 }
 
 export interface BillingPaymentRecord {
-  /** ドキュメントID = Stripe イベントID（冪等キー） */
+  /** ドキュメントID = Stripe イベントID（冪等キー）。手動記録は 'manual_' で始まる */
   id: string;
   exhibitorId: string;
   /** 種別。旧ドキュメント（項目なし）は月額として扱う */
@@ -91,6 +91,12 @@ export interface BillingPaymentRecord {
   occurredAt: string;
   stripeEventId: string;
   stripeInvoiceId: string | null;
+  /** 記録の経路。旧ドキュメント（項目なし）は 'stripe' として扱う */
+  source: 'stripe' | 'manual';
+  /** 手動記録の対象（クーポン／プッシュ申請のID）。無ければ null */
+  targetId: string | null;
+  /** 手動記録のメモ（任意）。Stripe 経由は null */
+  note: string | null;
 }
 
 /** サーバー専用ドキュメントに保持する Stripe 設定（値は外に出さない）。 */
@@ -636,6 +642,33 @@ export async function listShopBillings(
   return snap.docs.map((doc) => toShopBilling(doc.id, doc.data()));
 }
 
+/**
+ * 手動入金（月額分）を受けたときの課金レコード反映。
+ * - 解約済み（canceled）の店は復活させない（何もせず現在の状態を返す）。
+ * - それ以外は支払い済みにし、期間の終わりを「現在の期間終了と支払日の
+ *   遅い方から1ヶ月後」まで延ばす。掲載停止中なら停止を解除する。
+ * - 月額が未設定（0）の店は、記録した金額を月額として残す。
+ */
+export async function markShopBillingPaidManually(
+  db: Firestore,
+  eventId: string,
+  exhibitorId: string,
+  input: { amount: number; currentPeriodEnd: string },
+): Promise<ShopBilling | null> {
+  const existing = await getShopBilling(db, eventId, exhibitorId);
+  if (existing?.status === 'canceled') return existing;
+  const billing = await writeShopBilling(db, eventId, exhibitorId, {
+    status: 'active',
+    currentPeriodEnd: input.currentPeriodEnd,
+    ...(existing && existing.monthlyAmount > 0
+      ? {}
+      : { monthlyAmount: input.amount }),
+  });
+  await setShopBillingSuspended(db, eventId, exhibitorId, false);
+  await setShopDelistedAt(db, eventId, exhibitorId, null);
+  return billing;
+}
+
 async function writeShopBilling(
   db: Firestore,
   eventId: string,
@@ -676,6 +709,9 @@ export async function listBillingPayments(
       occurredAt: typeof data.occurredAt === 'string' ? data.occurredAt : '',
       stripeEventId: String(data.stripeEventId ?? doc.id),
       stripeInvoiceId: stringOrNull(data.stripeInvoiceId),
+      source: data.source === 'manual' ? ('manual' as const) : ('stripe' as const),
+      targetId: stringOrNull(data.targetId),
+      note: stringOrNull(data.note),
     };
   });
 }

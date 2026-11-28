@@ -7,6 +7,8 @@ import { NextResponse } from 'next/server';
 const mocks = vi.hoisted(() => ({
   requireEventOwner: vi.fn(),
   listExhibitors: vi.fn(),
+  listCoupons: vi.fn(),
+  listPushRequestsForAdmin: vi.fn(),
   findEnabledBillingOrganizer: vi.fn(),
   listShopBillings: vi.fn(),
   listBillingPayments: vi.fn(),
@@ -19,6 +21,10 @@ vi.mock('@/lib/event-auth', () => ({
 }));
 vi.mock('@/lib/event-coupon', () => ({
   listExhibitors: mocks.listExhibitors,
+  listCoupons: mocks.listCoupons,
+}));
+vi.mock('@/lib/event-push-request', () => ({
+  listPushRequestsForAdmin: mocks.listPushRequestsForAdmin,
 }));
 vi.mock('@/lib/event-billing', () => ({
   findEnabledBillingOrganizer: mocks.findEnabledBillingOrganizer,
@@ -75,6 +81,26 @@ beforeEach(() => {
     previousMonthKey: '2026-10',
     previousMonthTotal: 0,
   });
+  mocks.listCoupons.mockResolvedValue([
+    {
+      id: 'coupon-1',
+      exhibitorId: 'shop-1',
+      title: 'クーポン1',
+      paymentPending: true,
+      feeAmount: 500,
+    },
+    {
+      id: 'coupon-2',
+      exhibitorId: 'shop-1',
+      title: 'クーポン2',
+      paymentPending: false,
+      feeAmount: null,
+    },
+  ]);
+  mocks.listPushRequestsForAdmin.mockResolvedValue([
+    { id: 'push-1', exhibitorId: 'shop-1', title: 'プッシュ1', status: 'unpaid', feeAmount: 1000 },
+    { id: 'push-2', exhibitorId: 'shop-1', title: 'プッシュ2', status: 'pending', feeAmount: 1000 },
+  ]);
 });
 
 describe('GET /api/events/[eventId]/shop-billings', () => {
@@ -106,6 +132,13 @@ describe('GET /api/events/[eventId]/shop-billings', () => {
       currentMonthTotal: 3000,
       previousMonthKey: '2026-10',
       previousMonthTotal: 0,
+    });
+    // 手動入金の対象候補は支払い待ちのものだけが店ごとに返る
+    expect(body.pendingTargets).toEqual({
+      'shop-1': {
+        coupons: [{ id: 'coupon-1', title: 'クーポン1', feeAmount: 500 }],
+        pushRequests: [{ id: 'push-1', title: 'プッシュ1', feeAmount: 1000 }],
+      },
     });
   });
 });

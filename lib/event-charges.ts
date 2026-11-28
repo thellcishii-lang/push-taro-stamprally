@@ -280,6 +280,10 @@ export interface ApplyChargeEffectInput {
   paidAt: string;
   /** Webhook 経由のときの Stripe イベントID。照会経由は null */
   stripeEventId: string | null;
+  /** 記録の経路。未指定は 'stripe'。手動記録は 'manual' */
+  source?: 'stripe' | 'manual';
+  /** 手動記録のメモ（任意） */
+  note?: string | null;
 }
 
 export interface ApplyChargeEffectResult {
@@ -341,6 +345,8 @@ export async function applyChargeEffect(
       stripeEventId: input.stripeEventId,
       stripeInvoiceId: null,
       stripeCheckoutSessionId: input.sessionId,
+      source: input.source ?? 'stripe',
+      note: input.note ?? null,
     });
   } catch (error) {
     if (!isAlreadyExistsError(error)) throw error;
@@ -355,7 +361,13 @@ export async function applyChargeEffect(
   if (input.kind === COUPON_ISSUE_KIND) {
     await activatePaidCoupon(input.eventId, input.targetId);
     const coupon = await getCoupon(input.eventId, input.targetId);
-    const done = coupon !== null && coupon.active && !coupon.paymentPending;
+    // 支払いの反映が済んだかは「支払い待ちでなくなった」ことで判定する。
+    // 公開（active）は管理人承認も済んだときだけなので、承認待ちの間は
+    // active でなくても支払い側は完了として扱う。
+    const done =
+      coupon !== null &&
+      !coupon.paymentPending &&
+      (coupon.active || coupon.approvalStatus === 'pending');
     return { applied: done, duplicate, ...(done ? {} : { reason: 'not-pending' }) };
   }
   const request = await markPushRequestPaid(db, input.eventId, input.targetId);

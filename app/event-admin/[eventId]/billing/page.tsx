@@ -70,6 +70,22 @@ interface BillingPaymentItem {
   paidAt: string | null;
   occurredAt: string;
   stripeInvoiceId: string | null;
+  source?: 'stripe' | 'manual';
+  targetId?: string | null;
+  note?: string | null;
+}
+
+interface PendingTargets {
+  coupons: Array<{ id: string; title: string; feeAmount: number | null }>;
+  pushRequests: Array<{ id: string; title: string; feeAmount: number }>;
+}
+
+interface ManualFormState {
+  kind: BillingPaymentKind;
+  amount: string;
+  paidDate: string;
+  note: string;
+  targetId: string;
 }
 
 const KIND_LABEL_KEY: Record<BillingPaymentKind, AdminTextKey> = {
@@ -239,6 +255,10 @@ export default function EventBillingAdminPage() {
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvMessage, setCsvMessage] = useState('');
+  const [pendingTargets, setPendingTargets] = useState<Record<string, PendingTargets>>({});
+  const [manualOpenId, setManualOpenId] = useState<string | null>(null);
+  const [manualForms, setManualForms] = useState<Record<string, ManualFormState>>({});
+  const [manualSavingId, setManualSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -305,6 +325,7 @@ export default function EventBillingAdminPage() {
       const loadedBillings = (data.billings as ShopBillingItem[]) ?? [];
       setBillings(loadedBillings);
       setPayments((data.payments as BillingPaymentItem[]) ?? []);
+      setPendingTargets((data.pendingTargets as Record<string, PendingTargets>) ?? {});
       setSummary((data.summary as BillingSummary) ?? null);
       setAmountInputs((current) => {
         const next = { ...current };
@@ -419,6 +440,71 @@ export default function EventBillingAdminPage() {
       }));
     } finally {
       setIssuingId(null);
+    }
+  };
+
+  const openManualForm = (exhibitorId: string) => {
+    setManualOpenId((current) => (current === exhibitorId ? null : exhibitorId));
+    setManualForms((current) => {
+      if (current[exhibitorId]) return current;
+      const billing = billings.find((b) => b.exhibitorId === exhibitorId);
+      return {
+        ...current,
+        [exhibitorId]: {
+          kind: 'subscription' as BillingPaymentKind,
+          amount:
+            billing && billing.monthlyAmount > 0 ? String(billing.monthlyAmount) : '',
+          paidDate: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
+          note: '',
+          targetId: '',
+        },
+      };
+    });
+  };
+
+  const updateManualForm = (exhibitorId: string, patch: Partial<ManualFormState>) => {
+    setManualForms((current) => ({
+      ...current,
+      [exhibitorId]: { ...current[exhibitorId], ...patch },
+    }));
+  };
+
+  const handleManualSubmit = async (exhibitorId: string) => {
+    const form = manualForms[exhibitorId];
+    if (!form) return;
+    setManualSavingId(exhibitorId);
+    setRowMessages((current) => ({ ...current, [exhibitorId]: '' }));
+    try {
+      const data = await callApi(
+        `/api/events/${eventId}/shop-billings/${exhibitorId}/manual-payments`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            kind: form.kind,
+            amount: Number(form.amount),
+            paidDate: form.paidDate,
+            note: form.note || null,
+            targetId: form.targetId || null,
+          }),
+        },
+      );
+      setRowMessages((current) => ({
+        ...current,
+        [exhibitorId]:
+          data.applied === false
+            ? adminText(locale, 'billingManualNotApplied')
+            : adminText(locale, 'billingManualDone'),
+      }));
+      setManualOpenId(null);
+      await loadBillings();
+    } catch (e) {
+      setRowMessages((current) => ({
+        ...current,
+        [exhibitorId]:
+          e instanceof Error ? e.message : adminText(locale, 'billingManualFailed'),
+      }));
+    } finally {
+      setManualSavingId(null);
     }
   };
 
@@ -919,6 +1005,145 @@ export default function EventBillingAdminPage() {
                     </div>
                   )}
 
+                  <div style={{ marginTop: 14 }}>
+                    <button
+                      onClick={() => openManualForm(exhibitor.id)}
+                      style={secondaryButtonStyle}
+                    >
+                      {adminText(locale, 'billingManualButton')}
+                    </button>
+                    {manualOpenId === exhibitor.id && manualForms[exhibitor.id] && (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          borderTop: '1px solid #f1f5f9',
+                          paddingTop: 12,
+                        }}
+                      >
+                        <p style={{ fontSize: 12.5, color: '#64748b', lineHeight: 1.7 }}>
+                          {adminText(locale, 'billingManualNote')}
+                        </p>
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: 10,
+                            flexWrap: 'wrap',
+                            alignItems: 'flex-end',
+                            marginTop: 10,
+                          }}
+                        >
+                          <label style={{ ...labelStyle, marginBottom: 0, flex: '0 1 160px' }}>
+                            {adminText(locale, 'billingManualKindLabel')}
+                            <select
+                              style={inputStyle}
+                              value={manualForms[exhibitor.id].kind}
+                              onChange={(e) =>
+                                updateManualForm(exhibitor.id, {
+                                  kind: e.target.value as BillingPaymentKind,
+                                  targetId: '',
+                                })
+                              }
+                            >
+                              <option value="subscription">
+                                {adminText(locale, 'billingKindSubscription')}
+                              </option>
+                              <option value="coupon-issue">
+                                {adminText(locale, 'billingKindCouponIssue')}
+                              </option>
+                              <option value="push-send">
+                                {adminText(locale, 'billingKindPushSend')}
+                              </option>
+                            </select>
+                          </label>
+                          {manualForms[exhibitor.id].kind !== 'subscription' && (
+                            <label style={{ ...labelStyle, marginBottom: 0, flex: '1 1 220px' }}>
+                              {adminText(locale, 'billingManualTargetLabel')}
+                              <select
+                                style={inputStyle}
+                                value={manualForms[exhibitor.id].targetId}
+                                onChange={(e) => {
+                                  const targetId = e.target.value;
+                                  const list =
+                                    manualForms[exhibitor.id].kind === 'coupon-issue'
+                                      ? pendingTargets[exhibitor.id]?.coupons ?? []
+                                      : pendingTargets[exhibitor.id]?.pushRequests ?? [];
+                                  const chosen = list.find((t) => t.id === targetId);
+                                  updateManualForm(exhibitor.id, {
+                                    targetId,
+                                    ...(chosen && chosen.feeAmount != null
+                                      ? { amount: String(chosen.feeAmount) }
+                                      : {}),
+                                  });
+                                }}
+                              >
+                                <option value="">
+                                  {adminText(locale, 'billingManualTargetNone')}
+                                </option>
+                                {(manualForms[exhibitor.id].kind === 'coupon-issue'
+                                  ? pendingTargets[exhibitor.id]?.coupons ?? []
+                                  : pendingTargets[exhibitor.id]?.pushRequests ?? []
+                                ).map((target) => (
+                                  <option key={target.id} value={target.id}>
+                                    {target.title}
+                                    {target.feeAmount != null
+                                      ? `（${target.feeAmount.toLocaleString()}円）`
+                                      : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                          <label style={{ ...labelStyle, marginBottom: 0, flex: '0 1 140px' }}>
+                            {adminText(locale, 'billingAmountLabel')}
+                            <input
+                              style={inputStyle}
+                              type="number"
+                              min={1}
+                              step={1}
+                              inputMode="numeric"
+                              value={manualForms[exhibitor.id].amount}
+                              onChange={(e) =>
+                                updateManualForm(exhibitor.id, { amount: e.target.value })
+                              }
+                            />
+                          </label>
+                          <label style={{ ...labelStyle, marginBottom: 0, flex: '0 1 160px' }}>
+                            {adminText(locale, 'billingManualDateLabel')}
+                            <input
+                              style={inputStyle}
+                              type="date"
+                              value={manualForms[exhibitor.id].paidDate}
+                              onChange={(e) =>
+                                updateManualForm(exhibitor.id, { paidDate: e.target.value })
+                              }
+                            />
+                          </label>
+                          <label style={{ ...labelStyle, marginBottom: 0, flex: '1 1 180px' }}>
+                            {adminText(locale, 'billingManualNoteLabel')}
+                            <input
+                              style={inputStyle}
+                              type="text"
+                              value={manualForms[exhibitor.id].note}
+                              onChange={(e) =>
+                                updateManualForm(exhibitor.id, { note: e.target.value })
+                              }
+                            />
+                          </label>
+                          <button
+                            onClick={() => void handleManualSubmit(exhibitor.id)}
+                            disabled={manualSavingId === exhibitor.id}
+                            style={primaryButtonStyle}
+                          >
+                            <span style={adminButtonContentStyle}>
+                              {manualSavingId === exhibitor.id && <ButtonSpinner />}
+                              {adminText(locale, 'billingManualSubmit')}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {rowMessages[exhibitor.id] && (
                     <p style={adminFeedbackStyle}>{rowMessages[exhibitor.id]}</p>
                   )}
@@ -1007,9 +1232,25 @@ export default function EventBillingAdminPage() {
                         >
                           {adminText(locale, KIND_LABEL_KEY[payment.kind ?? 'subscription'])}
                         </span>
+                        {payment.source === 'manual' && (
+                          <span
+                            style={{
+                              marginLeft: 6,
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 999,
+                              color: '#92400e',
+                              backgroundColor: '#fef3c7',
+                            }}
+                          >
+                            {adminText(locale, 'billingManualBadge')}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 12, color: '#64748b' }}>
                         {formatDateTime(payment.paidAt ?? payment.occurredAt, locale)}
+                        {payment.note ? ` ・ ${payment.note}` : ''}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
