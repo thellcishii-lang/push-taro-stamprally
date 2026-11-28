@@ -125,6 +125,7 @@ interface ShopCouponItem {
   active: boolean;
   paymentPending: boolean;
   feeAmount: number | null;
+  approvalStatus?: 'approved' | 'pending' | 'rejected';
   createdAt: string;
 }
 
@@ -531,7 +532,9 @@ export default function ExhibitorShopPage() {
       setCouponMessage(
         data.coupon?.paymentPending
           ? redeemText(locale, 'chargePayFailed')
-          : redeemText(locale, 'couponIssuedMessage'),
+          : data.coupon?.approvalStatus === 'pending'
+            ? redeemText(locale, 'couponIssuedPendingApproval')
+            : redeemText(locale, 'couponIssuedMessage'),
       );
     } catch (e) {
       setCouponMessage(
@@ -2192,20 +2195,29 @@ export default function ExhibitorShopPage() {
                           fontSize: 11.5,
                           fontWeight: 700,
                           color: '#ffffff',
-                          backgroundColor: coupon.paymentPending
-                            ? '#b45309'
-                            : coupon.active
-                              ? '#16a34a'
-                              : '#6b7280',
+                          backgroundColor:
+                            coupon.approvalStatus === 'rejected'
+                              ? '#dc2626'
+                              : coupon.approvalStatus === 'pending'
+                                ? '#b45309'
+                                : coupon.paymentPending
+                                  ? '#b45309'
+                                  : coupon.active
+                                    ? '#16a34a'
+                                    : '#6b7280',
                           borderRadius: 6,
                           padding: '2px 8px',
                         }}
                       >
-                        {coupon.paymentPending
-                          ? redeemText(locale, 'couponStatusUnpaid')
-                          : coupon.active
-                            ? redeemText(locale, 'couponStatusActive')
-                            : redeemText(locale, 'couponStatusInactive')}
+                        {coupon.approvalStatus === 'rejected'
+                          ? redeemText(locale, 'couponStatusRejected')
+                          : coupon.approvalStatus === 'pending'
+                            ? redeemText(locale, 'couponStatusAwaitingApproval')
+                            : coupon.paymentPending
+                              ? redeemText(locale, 'couponStatusUnpaid')
+                              : coupon.active
+                                ? redeemText(locale, 'couponStatusActive')
+                                : redeemText(locale, 'couponStatusInactive')}
                       </span>
                       {coupon.paymentPending && (
                         <button
