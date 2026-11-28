@@ -61,6 +61,7 @@ import {
   findCheckpointNumberConflict,
   normalizeStampMethods,
   parseCheckpointNumber,
+  parseCouponApprovalStatus,
   parseCouponIssuedBy,
   parseCouponWindowDate,
   parseExhibitorKind,
@@ -83,6 +84,7 @@ const couponA: EventCoupon = {
   issuedBy: 'admin',
   paymentPending: false,
   feeAmount: null,
+  approvalStatus: 'approved',
   claimFrom: null,
   claimUntil: null,
   useFrom: null,
@@ -101,6 +103,7 @@ const couponB: EventCoupon = {
   issuedBy: 'admin',
   paymentPending: false,
   feeAmount: null,
+  approvalStatus: 'approved',
   claimFrom: null,
   claimUntil: null,
   useFrom: null,
@@ -512,5 +515,17 @@ describe('クーポンの取得・使用期間', () => {
     expect(
       evaluateRedemption({ type: 'organizer' }, windowed, redeemedClaim, '2026-11-30'),
     ).toEqual({ allowed: false, reason: 'already-redeemed' });
+  });
+});
+
+describe('parseCouponApprovalStatus（クーポンの承認状態）', () => {
+  it("'pending' / 'rejected' を読み、それ以外は承認済みに倒す", () => {
+    expect(parseCouponApprovalStatus('pending')).toBe('pending');
+    expect(parseCouponApprovalStatus('rejected')).toBe('rejected');
+    expect(parseCouponApprovalStatus('approved')).toBe('approved');
+    // 旧ドキュメント（項目なし）は承認済み（従来どおり公開されていた）
+    expect(parseCouponApprovalStatus(undefined)).toBe('approved');
+    expect(parseCouponApprovalStatus(null)).toBe('approved');
+    expect(parseCouponApprovalStatus('other')).toBe('approved');
   });
 });

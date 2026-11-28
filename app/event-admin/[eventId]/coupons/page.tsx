@@ -69,6 +69,9 @@ interface Coupon {
   description: string;
   keywords: string[];
   active: boolean;
+  issuedBy?: 'admin' | 'shop';
+  paymentPending?: boolean;
+  approvalStatus?: 'approved' | 'pending' | 'rejected';
 }
 
 const VIOLET = '#8B5E34';
@@ -159,6 +162,7 @@ export default function EventCouponAdminPage() {
   const [password, setPassword] = useState('');
   const [exhibitors, setExhibitors] = useState<Exhibitor[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
   const [couponCap, setCouponCap] = useState(100);
   const [eventName, setEventName] = useState('');
   // ポータル（特設サイト本契約）が有効なら管理場所はポータル側。
@@ -562,6 +566,32 @@ export default function EventCouponAdminPage() {
       setCpDisplayMessage(adminText(locale, 'rotatingDisplayLinkCopied'));
     } catch {
       // コピーできなくても URL は表示されているので手動でコピーできる
+    }
+  };
+
+  const handleCouponApproval = async (
+    couponId: string,
+    decision: 'approved' | 'rejected',
+  ) => {
+    setApprovalBusyId(couponId);
+    try {
+      const result = await callApi(
+        `/api/events/${eventId}/coupons/${couponId}/approval`,
+        { method: 'POST', body: JSON.stringify({ decision }) },
+      );
+      if (result?.coupon) {
+        setCoupons((current) =>
+          current.map((c) => (c.id === couponId ? (result.coupon as Coupon) : c)),
+        );
+      } else {
+        await loadAll();
+      }
+    } catch (e) {
+      setLoadMessage(
+        e instanceof Error ? e.message : adminText(locale, 'couponApprovalFailed'),
+      );
+    } finally {
+      setApprovalBusyId(null);
     }
   };
 
@@ -1444,6 +1474,106 @@ export default function EventCouponAdminPage() {
                 adminText(locale, 'keywordsSuffix', { keywords: coupon.keywords.join('、') })}
             </div>
             {coupon.description && <p style={{ fontSize: 13, marginTop: 2 }}>{coupon.description}</p>}
+            {coupon.issuedBy === 'shop' && (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  marginTop: 10,
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                }}
+              >
+                {coupon.approvalStatus === 'pending' && (
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      padding: '3px 12px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      borderRadius: 999,
+                      backgroundColor: '#FEF3C7',
+                      color: '#92400E',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {adminText(locale, 'couponApprovalPendingBadge')}
+                  </span>
+                )}
+                {coupon.approvalStatus === 'rejected' && (
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      padding: '3px 12px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      borderRadius: 999,
+                      backgroundColor: '#FEE2E2',
+                      color: '#B91C1C',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {adminText(locale, 'couponApprovalRejectedBadge')}
+                  </span>
+                )}
+                {coupon.paymentPending && (
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      padding: '3px 12px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      borderRadius: 999,
+                      backgroundColor: '#E8EAF1',
+                      color: '#5B6472',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {adminText(locale, 'couponApprovalPaymentBadge')}
+                  </span>
+                )}
+                {coupon.approvalStatus === 'pending' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void handleCouponApproval(coupon.id, 'approved')}
+                      disabled={approvalBusyId === coupon.id}
+                      style={{
+                        padding: '6px 16px',
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        borderRadius: 999,
+                        border: 'none',
+                        backgroundColor: '#16A34A',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {adminText(locale, 'couponApprovalApproveButton')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleCouponApproval(coupon.id, 'rejected')}
+                      disabled={approvalBusyId === coupon.id}
+                      style={{
+                        padding: '6px 16px',
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        borderRadius: 999,
+                        border: '1px solid #FCA5A5',
+                        backgroundColor: '#ffffff',
+                        color: '#B91C1C',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {adminText(locale, 'couponApprovalRejectButton')}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </article>
         ))}
         <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>

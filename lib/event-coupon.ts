@@ -272,6 +272,18 @@ export function parseCouponIssuedBy(value: unknown): CouponIssuedBy {
   return value === 'shop' ? 'shop' : 'admin';
 }
 
+/**
+ * クーポンの主催者承認の状態。参加店発行のクーポンは、無料でも主催者の
+ * 承認が済むまで公開されない（内容の整合性を主催者が確認するため）。
+ * 主催者発行は常に 'approved'。旧ドキュメント（項目なし）も 'approved'。
+ */
+export type CouponApprovalStatus = 'approved' | 'pending' | 'rejected';
+
+/** 保存済みの承認状態を防御的に読む（読み取り用）。 */
+export function parseCouponApprovalStatus(value: unknown): CouponApprovalStatus {
+  return value === 'pending' || value === 'rejected' ? value : 'approved';
+}
+
 export interface EventCoupon {
   id: string;
   exhibitorId: string;
@@ -299,6 +311,13 @@ export interface EventCoupon {
    * 主催者発行・無料発行は null。
    */
   feeAmount: number | null;
+  /**
+   * 主催者承認の状態。参加店発行は 'pending' で作られ、主催者が承認
+   * （'approved'）するまで active にならない。却下（'rejected'）された
+   * クーポンは公開されない。支払い待ちと承認待ちは独立に解消され、
+   * 両方が済んだ時点で初めて active になる。
+   */
+  approvalStatus: CouponApprovalStatus;
   /**
    * 取得できる期間の開始日（JST の 'YYYY-MM-DD'）。告知期間中に先に
    * 取得させて使用は開催期間だけ、という運用のために使用期間と分けて
@@ -760,6 +779,11 @@ export async function createCoupon(
     paymentPending?: boolean;
     /** 作成時点の発行手数料スナップショット（円）。支払い待ちのときだけ付ける */
     feeAmount?: number | null;
+    /**
+     * 主催者承認の状態。未指定のとき、参加店発行は 'pending'（承認待ち）、
+     * 主催者発行は 'approved'。
+     */
+    approvalStatus?: CouponApprovalStatus;
     /** 取得できる期間の開始日（'YYYY-MM-DD'）。未指定は制限なし */
     claimFrom?: string | null;
     /** 取得できる期間の終了日（'YYYY-MM-DD'）。未指定は制限なし */
@@ -796,6 +820,10 @@ export async function createCoupon(
     translateText(description),
   ]);
   const paymentPending = input.paymentPending === true;
+  const issuedBy = input.issuedBy ?? 'admin';
+  // 参加店発行は無料でも主催者の承認が済むまで公開しない
+  const approvalStatus =
+    input.approvalStatus ?? (issuedBy === 'shop' ? 'pending' : 'approved');
   const windows = normalizeCouponWindows(input);
   const coupon: EventCoupon = {
     id: ref.id,
@@ -806,11 +834,12 @@ export async function createCoupon(
     titleI18n,
     descriptionI18n,
     keywords: (input.keywords ?? []).map((k) => k.trim()).filter(Boolean),
-    // 支払い待ちの間は無効で作る（来場者に見せず、取得もさせない）
-    active: !paymentPending,
-    issuedBy: input.issuedBy ?? 'admin',
+    // 支払い待ち・承認待ちの間は無効で作る（来場者に見せず、取得もさせない）
+    active: !paymentPending && approvalStatus === 'approved',
+    issuedBy,
     paymentPending,
     feeAmount: paymentPending ? (input.feeAmount ?? null) : null,
+    approvalStatus,
     ...windows,
   };
   await ref.set({ ...coupon, createdAt: FieldValue.serverTimestamp() });
@@ -832,6 +861,7 @@ function mapCoupon(id: string, data: Record<string, unknown>): EventCoupon {
     issuedBy: parseCouponIssuedBy(data.issuedBy),
     paymentPending: data.paymentPending === true,
     feeAmount: typeof data.feeAmount === 'number' ? data.feeAmount : null,
+    approvalStatus: parseCouponApprovalStatus(data.approvalStatus),
     claimFrom: parseCouponWindowDate(data.claimFrom),
     claimUntil: parseCouponWindowDate(data.claimUntil),
     useFrom: parseCouponWindowDate(data.useFrom),
@@ -854,9 +884,11 @@ export async function getCoupon(
 }
 
 /**
- * 支払い待ちクーポンを有効化する（発行手数料の支払い確認後に呼ぶ）。
- * 既に有効化済みなら何もしない（冪等）。戻り値は「今回有効化したか」。
- * クーポンが無い・支払い待ちでない場合は false。
+ * 支払い待ちクーポンの支払いを確定する（発行手数料の支払い確認後に呼ぶ）。
+ * 支払い待ちでなくなるが、公開（active）になるのは主催者承認も済んだ
+ * ときだけ。既に確定済みなら何もしない（冪等）。
+ * 戻り値は「今回支払いを確定したか」。クーポンが無い・支払い待ちでない
+ * 場合は false。
  */
 export async function activatePaidCoupon(
   eventId: string,
@@ -865,9 +897,34 @@ export async function activatePaidCoupon(
   const ref = couponsRef(eventId).doc(couponId);
   const doc = await ref.get();
   if (!doc.exists) return false;
-  if (doc.data()?.paymentPending !== true) return false;
-  await ref.update({ active: true, paymentPending: false });
+  const data = doc.data();
+  if (data?.paymentPending !== true) return false;
+  const approved = parseCouponApprovalStatus(data?.approvalStatus) === 'approved';
+  await ref.update({ active: approved, paymentPending: false });
   return true;
+}
+
+/**
+ * 主催者承認の結果を反映する。
+ * - 承認: 承認状態を 'approved' にし、支払い待ちでなければ公開する。
+ * - 却下: 承認状態を 'rejected' にし、公開しない（支払い済みでも公開
+ *   されない。支払い自体の記録は課金側に残る）。
+ * クーポンが無ければ null。
+ */
+export async function setCouponApproval(
+  eventId: string,
+  couponId: string,
+  decision: 'approved' | 'rejected',
+): Promise<EventCoupon | null> {
+  const ref = couponsRef(eventId).doc(couponId);
+  const doc = await ref.get();
+  if (!doc.exists) return null;
+  const paymentPending = doc.data()?.paymentPending === true;
+  await ref.update({
+    approvalStatus: decision,
+    active: decision === 'approved' && !paymentPending,
+  });
+  return getCoupon(eventId, couponId);
 }
 
 // ─── 取得 ───

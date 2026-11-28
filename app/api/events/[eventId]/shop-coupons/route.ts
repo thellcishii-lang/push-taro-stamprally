@@ -1,10 +1,13 @@
 // app/api/events/[eventId]/shop-coupons/route.ts
 // 参加店向け: 自店のクーポン一覧と、自店クーポンの発行。
+// 店舗発行のクーポンは、無料・有料を問わず主催者の承認が済むまで
+// 公開されない（承認待ちで作られる）。
 // 発行手数料（プロジェクト設定 couponIssuePrice、1件あたり）:
-// - 無料（0円・未設定）: 発行したクーポンはそのまま有効になる。
+// - 無料（0円・未設定）: 承認されればそのまま公開される。
 // - 有料: クーポンは支払い待ち（非公開・取得不可）で作られ、主催者
-//   自身の Stripe の Checkout で支払うと有効になる。支払いの反映は
-//   戻り時の照会（shop-charges/verify）と Webhook の2経路で冪等。
+//   自身の Stripe の Checkout で支払うと支払いが確定する。支払いの
+//   反映は戻り時の照会（shop-charges/verify）と Webhook の2経路で冪等。
+//   承認と支払いの両方が済んだ時点で公開される。
 // exhibitorId はセッションから決める（他店の分は作れない）。
 // 協賛（広告専用）アカウントは使えない。
 import { NextResponse } from 'next/server';
@@ -118,6 +121,7 @@ export async function POST(
       issuedBy: 'shop',
       paymentPending: paid,
       feeAmount: paid ? fee : null,
+      approvalStatus: 'pending',
     });
   } catch (error) {
     return NextResponse.json(
