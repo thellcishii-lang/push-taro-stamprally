@@ -473,6 +473,9 @@ function paymentRecord(
     occurredAt: '2026-11-02T00:00:00.000Z',
     stripeEventId: 'evt_1',
     stripeInvoiceId: 'in_123',
+    source: 'stripe',
+    targetId: null,
+    note: null,
     ...overrides,
   };
 }

@@ -6,7 +6,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
 import { requireEventOwner } from '@/lib/event-auth';
-import { listExhibitors } from '@/lib/event-coupon';
+import { listCoupons, listExhibitors } from '@/lib/event-coupon';
+import { listPushRequestsForAdmin } from '@/lib/event-push-request';
 import {
   findEnabledBillingOrganizer,
   listBillingPayments,
@@ -29,13 +30,41 @@ export async function GET(
     return NextResponse.json({ error: '見つかりません' }, { status: 404 });
   }
 
-  const [exhibitors, billings, recentPayments, allPayments] = await Promise.all([
-    listExhibitors(eventId),
-    listShopBillings(db, eventId),
-    listBillingPayments(db, eventId, 50),
-    listBillingPayments(db, eventId, 1000),
-  ]);
+  const [exhibitors, billings, recentPayments, allPayments, coupons, pushRequests] =
+    await Promise.all([
+      listExhibitors(eventId),
+      listShopBillings(db, eventId),
+      listBillingPayments(db, eventId, 50),
+      listBillingPayments(db, eventId, 1000),
+      listCoupons(eventId),
+      listPushRequestsForAdmin(db, eventId),
+    ]);
   const summary = summarizePaymentsByMonth(allPayments, new Date());
+
+  // 手動入金の対象候補: 支払い待ちのクーポンとプッシュ申請を店ごとに引く
+  const pendingTargets: Record<
+    string,
+    {
+      coupons: Array<{ id: string; title: string; feeAmount: number | null }>;
+      pushRequests: Array<{ id: string; title: string; feeAmount: number }>;
+    }
+  > = {};
+  for (const coupon of coupons) {
+    if (!coupon.paymentPending) continue;
+    (pendingTargets[coupon.exhibitorId] ??= { coupons: [], pushRequests: [] }).coupons.push({
+      id: coupon.id,
+      title: coupon.title,
+      feeAmount: coupon.feeAmount,
+    });
+  }
+  for (const pushRequest of pushRequests) {
+    if (pushRequest.status !== 'unpaid') continue;
+    (pendingTargets[pushRequest.exhibitorId] ??= { coupons: [], pushRequests: [] }).pushRequests.push({
+      id: pushRequest.id,
+      title: pushRequest.title,
+      feeAmount: pushRequest.feeAmount,
+    });
+  }
 
   return NextResponse.json({
     // 店舗課金は参加店だけが対象（協賛は広告専用、スポットはチェック
@@ -56,6 +85,7 @@ export async function GET(
       })),
     billings,
     payments: recentPayments,
+    pendingTargets,
     summary: {
       currentMonthKey: summary.currentMonthKey,
       currentMonthTotal: summary.currentMonthTotal,
