@@ -80,12 +80,28 @@ describe('evaluateCheckin', () => {
     expect(second.issuedCycles).toEqual([]);
   });
 
-  it('日付が変われば数えられる（連続でなくても累積する）', () => {
+  it('翌日のチェックインで連続2日目になる', () => {
     const day1 = evaluateCheckin(state(), '2026-11-17', 7);
-    // 18日を飛ばして19日に開いても、累積で2日目になる
-    const day3 = evaluateCheckin(day1.nextState, '2026-11-19', 7);
-    expect(day3.alreadyCheckedIn).toBe(false);
-    expect(day3.nextState.countInCycle).toBe(2);
+    const day2 = evaluateCheckin(day1.nextState, '2026-11-18', 7);
+    expect(day2.alreadyCheckedIn).toBe(false);
+    expect(day2.nextState.countInCycle).toBe(2);
+  });
+
+  it('1日でも空くと連続が途切れて、その日から数え直しになる', () => {
+    const day1 = evaluateCheckin(state(), '2026-11-17', 7);
+    const day2 = evaluateCheckin(day1.nextState, '2026-11-18', 7);
+    expect(day2.nextState.countInCycle).toBe(2);
+    // 19日を飛ばして20日に開くと、貯めた2日は消えて1日目から
+    const day4 = evaluateCheckin(day2.nextState, '2026-11-20', 7);
+    expect(day4.alreadyCheckedIn).toBe(false);
+    expect(day4.nextState.countInCycle).toBe(1);
+    expect(day4.nextState.lastCheckinDate).toBe('2026-11-20');
+  });
+
+  it('月をまたいでも連続は続く', () => {
+    const day1 = evaluateCheckin(state(), '2026-11-30', 7);
+    const day2 = evaluateCheckin(day1.nextState, '2026-12-01', 7);
+    expect(day2.nextState.countInCycle).toBe(2);
   });
 
   it('目標日数ちょうどでクーポン1件が発行され、カウンタが 0 に戻る', () => {
